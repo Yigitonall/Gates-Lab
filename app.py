@@ -141,7 +141,7 @@ def integrate_psd_band(
     if band_f.size < 2:
         return np.nan
 
-    return float(np.trapz(band_p, band_f))
+    return float(np.trapezoid(band_p, band_f))
 
 
 def calculate_calibration_offset(
