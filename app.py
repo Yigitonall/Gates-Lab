@@ -62,32 +62,38 @@ if uploaded_audio is not None:
         "🧠 ARTICULATION INDEX (%AI)"
     ])
 
-    # ==========================================
+   # ==========================================
     # TAB 1: COLOR MAPS (SPECTROGRAM)
     # ==========================================
     with tab1:
         st.subheader("Color Maps (Frekans - Zaman - Şiddet Haritası)")
         
-        # Spektrogram Hesaplama
-        f, t, Sxx = spectrogram(audio_signal, sample_rate, nperseg=2048, noverlap=1024)
-        # Sinyal gücünü Desibel (dB) ölçeğine çevir
-        Sxx_db = 10 * np.log10(Sxx + 1e-10)
+        # Spektrogram Hesaplama (Daha net bir görüntü için nperseg değerini 4096 yaptık)
+        f, t, Sxx = spectrogram(audio_signal, sample_rate, nperseg=4096, noverlap=2048)
         
-        # Performans için üst frekans sınırını 10kHz ile kısıtlayalım (Gürültü için idealdir)
-        idx_f = f <= 10000
+        # Akustik Standart Normalizasyon: En yüksek sesi 0 dB referans al
+        Sxx_db = 10 * np.log10((Sxx / np.max(Sxx)) + 1e-10)
+        
+        # Gürültü analizi için frekans aralığını 20 Hz ile 20.000 Hz arası sınırla
+        idx_f = (f >= 20) & (f <= 20000)
         f_filtered = f[idx_f]
         Sxx_db_filtered = Sxx_db[idx_f, :]
 
         fig_cmap = go.Figure(data=go.Heatmap(
             x=t, y=f_filtered, z=Sxx_db_filtered,
             colorscale='Jet',
-            colorbar=dict(title="Şiddet (dB)")
+            zmin=-80, zmax=0, # Renk haritasını tam olarak ilk görseldeki gibi -80 ile 0 dB arasına kilitliyoruz
+            colorbar=dict(title="Gürültü (dB)")
         ))
+        
         fig_cmap.update_layout(
             xaxis_title="Zaman (Saniye)",
             yaxis_title="Frekans (Hz)",
+            yaxis_type="log", # Y eksenini Logaritmik yapıyoruz (En kritik düzeltme)
             height=600,
-            margin=dict(l=20, r=20, t=40, b=20)
+            margin=dict(l=20, r=20, t=40, b=20),
+            plot_bgcolor='black', # Arka planı koyulaştırarak yüksek kontrast sağlıyoruz
+            paper_bgcolor='rgba(0,0,0,0)'
         )
         st.plotly_chart(fig_cmap, use_container_width=True)
 
