@@ -1104,11 +1104,7 @@ with tab_ai:
                 f"**%{sii_percent:.1f} SII**."
             )
 
-        st.caption(
-            "Bu sonuç; normal işitme, iletim kaybı olmaması ve seçilen standart "
-            "konuşma spektrumu varsayımlarıyla hesaplanır. Reverberasyon ve gerçek "
-            "konuşma yolu ayrıca ölçülmediyse laboratuvar doğrulamasının yerini tutmaz."
-        )
+    
 
 
 # ============================================================
