@@ -731,13 +731,7 @@ with tab_color:
         & (spec_f <= min(max_display_frequency, nyquist))
     )
 
-    axis_scale = st.radio(
-        "Frekans ekseni",
-        ["Logaritmik", "Doğrusal"],
-        horizontal=True,
-        key="color_axis_scale",
-    )
-
+    # Frekans ekseni seçeneği arayüzden kaldırılarak endüstri standardı olan logaritmik yapıya sabitlendi.
     fig_color = go.Figure(
         go.Heatmap(
             x=spec_t,
@@ -756,17 +750,17 @@ with tab_color:
     )
 
     fig_color.update_layout(
-        title="Kalibre Edilmiş Akustik Spektrogram",
+        title="Kalibre Edilmiş Akustik Spektrogram (Logaritmik Ölçek)",
         xaxis_title="Zaman [s]",
         yaxis_title="Frekans [Hz]",
-        yaxis_type="log" if axis_scale == "Logaritmik" else "linear",
+        yaxis_type="log", # Kalıcı olarak logaritmik yapıldı
         height=620,
         margin=dict(l=40, r=30, t=60, b=40),
     )
 
     st.plotly_chart(fig_color, use_container_width=True)
     st.caption(
-        "Color map gerçek bir spektrogramdır: x=zaman, y=frekans, renk=dar bant SPL seviyesi."
+        "Color map gerçek bir spektrogramdır: x=zaman, y=frekans (logaritmik), renk=dar bant SPL seviyesi."
     )
 
 
