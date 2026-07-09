@@ -1102,12 +1102,7 @@ with tab_ai:
             st.error(
                 f"Gürültü konuşma bantlarını güçlü biçimde maskeliyor: "
                 f"**%{sii_percent:.1f} SII**."
-            )
-
-        st.caption(
-            "Bu sonuç; normal işitme, iletim kaybı olmaması ve seçilen standart "
-            "konuşma spektrumu varsayımlarıyla hesaplanır. Reverberasyon ve gerçek "
-            "konuşma yolu ayrıca ölçülmediyse laboratuvar doğrulamasının yerini tutmaz."
+      
         )
 
 
