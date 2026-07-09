@@ -487,22 +487,21 @@ uploaded_audio = st.sidebar.file_uploader(
     type=["wav"],
 )
 
-st.sidebar.subheader("🎚️ SPL Kalibrasyonu")
+st.sidebar.subheader("🎚️ SPL Kalibrasyonu (MAX HOLD)")
 reference_leq_db = st.sidebar.number_input(
-    "Aynı kaydın referans Leq seviyesi [dB SPL]",
+    "Maksimum Pik Seviyesi (MAX SPL) [dB]",
     min_value=20.0,
     max_value=140.0,
     value=80.0,
     step=0.1,
     help=(
-        "WAV kaydı boyunca ses seviye ölçerde görülen eşdeğer sürekli seviyeyi "
-        "girin. Maksimum pik değerini girmek spektrumun mutlak SPL kalibrasyonu "
-        "için doğru değildir."
+        "Test sırasında Voltcraft cihazındaki 'MAX/MIN' tuşunu kullanarak "
+        "ekranda sabitlediğiniz en yüksek desibel değerini buraya girin."
     ),
 )
 st.sidebar.caption(
-    "En doğru sonuç için referans ölçüm ile WAV kaydı aynı zaman aralığını ve aynı "
-    "A/C/Z ağırlıklandırmayı temsil etmelidir."
+    "Yazılım, dosya içindeki en şiddetli tepe noktasını bu değere eşitleyerek "
+    "tüm analiz grafiklerini gerçek laboratuvar ölçeğine kalibre edecektir."
 )
 
 st.sidebar.subheader("🏎️ RPM Bilgisi")
