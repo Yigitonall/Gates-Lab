@@ -624,19 +624,9 @@ if not available_fft_sizes:
 default_welch = min(16384, max(available_fft_sizes))
 default_stft = min(4096, max(available_fft_sizes))
 
-welch_size = st.sidebar.selectbox(
-    "Welch FFT segmenti",
-    available_fft_sizes,
-    index=available_fft_sizes.index(default_welch),
-    help="Büyük değer daha iyi frekans çözünürlüğü, daha az zaman ortalaması sağlar.",
-)
-
-stft_size = st.sidebar.selectbox(
-    "Spektrogram / order tracking segmenti",
-    available_fft_sizes,
-    index=available_fft_sizes.index(default_stft),
-    help="Büyük değer daha iyi frekans; küçük değer daha iyi zaman çözünürlüğü sağlar.",
-)
+# Sinyal işleme parametrelerini arayüzden kaldırdık, arka planda ideal standartlara sabitledik.
+welch_size = default_welch
+stft_size = default_stft
 
 max_display_frequency = st.sidebar.number_input(
     "Grafik üst frekans sınırı [Hz]",
