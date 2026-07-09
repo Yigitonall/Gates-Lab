@@ -487,21 +487,22 @@ uploaded_audio = st.sidebar.file_uploader(
     type=["wav"],
 )
 
-st.sidebar.subheader("🎚️ SPL Kalibrasyonu (MAX HOLD)")
+st.sidebar.subheader("🎚️ SPL Kalibrasyonu")
 reference_leq_db = st.sidebar.number_input(
-    "Maksimum Pik Seviyesi (MAX SPL) [dB]",
+    "Aynı kaydın referans Leq seviyesi [dB SPL]",
     min_value=20.0,
     max_value=140.0,
     value=80.0,
     step=0.1,
     help=(
-        "Test sırasında Voltcraft cihazındaki 'MAX/MIN' tuşunu kullanarak "
-        "ekranda sabitlediğiniz en yüksek desibel değerini buraya girin."
+        "WAV kaydı boyunca ses seviye ölçerde görülen eşdeğer sürekli seviyeyi "
+        "girin. Maksimum pik değerini girmek spektrumun mutlak SPL kalibrasyonu "
+        "için doğru değildir."
     ),
 )
 st.sidebar.caption(
-    "Yazılım, dosya içindeki en şiddetli tepe noktasını bu değere eşitleyerek "
-    "tüm analiz grafiklerini gerçek laboratuvar ölçeğine kalibre edecektir."
+    "En doğru sonuç için referans ölçüm ile WAV kaydı aynı zaman aralığını ve aynı "
+    "A/C/Z ağırlıklandırmayı temsil etmelidir."
 )
 
 st.sidebar.subheader("🏎️ RPM Bilgisi")
@@ -624,9 +625,19 @@ if not available_fft_sizes:
 default_welch = min(16384, max(available_fft_sizes))
 default_stft = min(4096, max(available_fft_sizes))
 
-# Sinyal işleme parametrelerini arayüzden kaldırdık, arka planda ideal standartlara sabitledik.
-welch_size = default_welch
-stft_size = default_stft
+welch_size = st.sidebar.selectbox(
+    "Welch FFT segmenti",
+    available_fft_sizes,
+    index=available_fft_sizes.index(default_welch),
+    help="Büyük değer daha iyi frekans çözünürlüğü, daha az zaman ortalaması sağlar.",
+)
+
+stft_size = st.sidebar.selectbox(
+    "Spektrogram / order tracking segmenti",
+    available_fft_sizes,
+    index=available_fft_sizes.index(default_stft),
+    help="Büyük değer daha iyi frekans; küçük değer daha iyi zaman çözünürlüğü sağlar.",
+)
 
 max_display_frequency = st.sidebar.number_input(
     "Grafik üst frekans sınırı [Hz]",
@@ -731,7 +742,13 @@ with tab_color:
         & (spec_f <= min(max_display_frequency, nyquist))
     )
 
-    # Frekans ekseni seçeneği arayüzden kaldırılarak endüstri standardı olan logaritmik yapıya sabitlendi.
+    axis_scale = st.radio(
+        "Frekans ekseni",
+        ["Logaritmik", "Doğrusal"],
+        horizontal=True,
+        key="color_axis_scale",
+    )
+
     fig_color = go.Figure(
         go.Heatmap(
             x=spec_t,
@@ -750,17 +767,17 @@ with tab_color:
     )
 
     fig_color.update_layout(
-        title="Kalibre Edilmiş Akustik Spektrogram (Logaritmik Ölçek)",
+        title="Kalibre Edilmiş Akustik Spektrogram",
         xaxis_title="Zaman [s]",
         yaxis_title="Frekans [Hz]",
-        yaxis_type="log", # Kalıcı olarak logaritmik yapıldı
+        yaxis_type="log" if axis_scale == "Logaritmik" else "linear",
         height=620,
         margin=dict(l=40, r=30, t=60, b=40),
     )
 
     st.plotly_chart(fig_color, use_container_width=True)
     st.caption(
-        "Color map gerçek bir spektrogramdır: x=zaman, y=frekans (logaritmik), renk=dar bant SPL seviyesi."
+        "Color map gerçek bir spektrogramdır: x=zaman, y=frekans, renk=dar bant SPL seviyesi."
     )
 
 
@@ -1102,7 +1119,12 @@ with tab_ai:
             st.error(
                 f"Gürültü konuşma bantlarını güçlü biçimde maskeliyor: "
                 f"**%{sii_percent:.1f} SII**."
-      
+            )
+
+        st.caption(
+            "Bu sonuç; normal işitme, iletim kaybı olmaması ve seçilen standart "
+            "konuşma spektrumu varsayımlarıyla hesaplanır. Reverberasyon ve gerçek "
+            "konuşma yolu ayrıca ölçülmediyse laboratuvar doğrulamasının yerini tutmaz."
         )
 
 
