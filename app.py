@@ -14,7 +14,7 @@ from scipy.signal import spectrogram, welch
 # SAYFA AYARLARI VE GATES KURUMSAL TEMA
 # ============================================================
 st.set_page_config(
-    page_title="Gates Ar-Ge Akustik Analiz",
+    page_title="Gates R&D NVH Analysis",
     page_icon="🔊",
     layout="wide",
 )
@@ -72,7 +72,23 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-st.title("🔊 Gürültü ve Akustik Analiz Sistemi (NVH)")
+# ============================================================
+# DİL SEÇİMİ VE ÇEVİRİ MOTORU (BILINGUAL SUPPORT)
+# ============================================================
+# Firma Logosu
+try:
+    st.sidebar.image("gates_logo.png", use_container_width=True)
+except:
+    pass
+
+lang_choice = st.sidebar.radio("🌐 Language / Dil", ["Türkçe", "English"], horizontal=True)
+lang = "tr" if lang_choice == "Türkçe" else "en"
+
+def t(tr_text: str, en_text: str) -> str:
+    """Seçili dile göre metni döndüren çeviri fonksiyonu."""
+    return tr_text if lang == "tr" else en_text
+
+st.title(t("🔊 Gürültü ve Akustik Analiz Sistemi (NVH)", "🔊 Noise and Acoustic Analysis System (NVH)"))
 st.caption(
     "COLOR MAPS • ORDER PLOTS • ARTICULATION INDEX / SII • 1/3 OCTAVE BAND PLOTS"
 )
@@ -94,12 +110,6 @@ SII_BANDWIDTH_ADJUSTMENT = np.array([22.48, 25.48, 28.48, 31.48, 34.48, 37.48], 
 SII_IMPORTANCE = np.array([0.0617, 0.1671, 0.2373, 0.2648, 0.2142, 0.0549], dtype=float)
 SII_INTERNAL_NOISE = np.array([-3.9, -9.7, -12.5, -17.7, -25.9, -7.1], dtype=float)
 SII_NORMAL_SPEECH = np.array([34.75, 34.27, 25.01, 17.32, 9.33, 1.13], dtype=float)
-SII_SPEECH_SPECTRA = {
-    "Normal": np.array([34.75, 34.27, 25.01, 17.32, 9.33, 1.13]),
-    "Raised / Yükseltilmiş": np.array([38.98, 40.15, 33.86, 25.32, 16.78, 5.07]),
-    "Loud / Yüksek": np.array([41.55, 44.85, 42.16, 34.39, 25.41, 11.39]),
-    "Shout / Bağırma": np.array([42.50, 49.24, 51.31, 44.32, 34.41, 20.72]),
-}
 
 # ============================================================
 # MÜHENDİSLİK FONKSİYONLARI
@@ -128,8 +138,8 @@ def read_wav_mono(uploaded_file) -> Tuple[int, np.ndarray]:
     signal = np.nan_to_num(signal, nan=0.0, posinf=0.0, neginf=0.0)
     signal -= np.mean(signal)
 
-    if signal.size < 256: raise ValueError("Ses dosyası çok kısa.")
-    if not np.any(np.abs(signal) > 0): raise ValueError("Geçerli sinyal bulunamadı.")
+    if signal.size < 256: raise ValueError(t("Ses dosyası çok kısa.", "Audio file is too short."))
+    if not np.any(np.abs(signal) > 0): raise ValueError(t("Geçerli sinyal bulunamadı.", "No valid signal found."))
     return int(sample_rate), signal
 
 def largest_power_of_two_at_most(value: int) -> int:
@@ -157,7 +167,7 @@ def integrate_psd_band(frequencies: np.ndarray, psd: np.ndarray, lower_hz: float
 def calculate_calibration_offset(frequencies: np.ndarray, psd: np.ndarray, reference_leq_db: float, max_frequency_hz: float) -> Tuple[float, float]:
     upper = min(float(max_frequency_hz), float(frequencies[-1]))
     recording_power = integrate_psd_band(frequencies, psd, 20.0, upper)
-    if not np.isfinite(recording_power) or recording_power <= 0: raise ValueError("Yeterli spektral enerji bulunamadı.")
+    if not np.isfinite(recording_power) or recording_power <= 0: raise ValueError(t("Yeterli spektral enerji bulunamadı.", "Sufficient spectral energy not found."))
     raw_level_db = 10.0 * np.log10(recording_power)
     offset_db = float(reference_leq_db) - raw_level_db
     return offset_db, raw_level_db
@@ -201,12 +211,11 @@ def octave_band_levels(frequencies: np.ndarray, psd: np.ndarray, calibration_off
         else: levels.append(np.nan)
     return np.asarray(levels, dtype=float)
 
-def compute_octave_sii(octave_noise_band_levels_db: np.ndarray, vocal_effort: str) -> pd.DataFrame:
-    speech = SII_SPEECH_SPECTRA[vocal_effort]
+def compute_octave_sii(octave_noise_band_levels_db: np.ndarray, speech_spectrum: np.ndarray) -> pd.DataFrame:
     noise_spectrum = octave_noise_band_levels_db - SII_BANDWIDTH_ADJUSTMENT
     disturbance = np.maximum(noise_spectrum, SII_INTERNAL_NOISE)
-    level_distortion = np.clip(1.0 - (speech - SII_NORMAL_SPEECH - 10.0) / 160.0, 0.0, 1.0)
-    audibility_k = np.clip((speech - disturbance + 15.0) / 30.0, 0.0, 1.0)
+    level_distortion = np.clip(1.0 - (speech_spectrum - SII_NORMAL_SPEECH - 10.0) / 160.0, 0.0, 1.0)
+    audibility_k = np.clip((speech_spectrum - disturbance + 15.0) / 30.0, 0.0, 1.0)
     band_audibility = level_distortion * audibility_k
     contribution = SII_IMPORTANCE * band_audibility
     return pd.DataFrame({
@@ -240,7 +249,7 @@ def prepare_rpm_series(rpm_dataframe: pd.DataFrame, rpm_column: str, time_column
     valid = rpm.notna() & time_values.notna() & (rpm > 0)
     rpm_values = rpm[valid].to_numpy(dtype=float)
     time_values_np = time_values[valid].to_numpy(dtype=float)
-    if rpm_values.size < 2: raise ValueError("RPM CSV dosyasında en az 2 veri olmalıdır.")
+    if rpm_values.size < 2: raise ValueError(t("RPM CSV dosyasında en az 2 veri olmalıdır.", "RPM CSV must contain at least 2 valid data points."))
     order = np.argsort(time_values_np)
     grouped = pd.DataFrame({"time": time_values_np[order], "rpm": rpm_values[order]}).groupby("time", as_index=False)["rpm"].mean()
     return grouped["time"].to_numpy(dtype=float), grouped["rpm"].to_numpy(dtype=float)
@@ -283,68 +292,62 @@ def bin_tracks_by_rpm(rpm_values: np.ndarray, tracks: dict[float, np.ndarray], r
 # ============================================================
 # YAN MENÜ (SIDEBAR)
 # ============================================================
-# Firma Logosu (Eğer gates_logo.png adlı dosya kök dizindeyse görünür, hata vermez)
-try:
-    st.sidebar.image("gates_logo.png", use_container_width=True)
-except:
-    pass # Logo yoksa sessizce atlar
+st.sidebar.header(t("📁 Veri Girişi ve Ayarlar", "📁 Data Entry & Settings"))
 
-st.sidebar.header("📁 Veri Girişi ve Ayarlar")
+uploaded_audio = st.sidebar.file_uploader(t("1. WAV ses dosyası", "1. WAV audio file"), type=["wav"])
 
-uploaded_audio = st.sidebar.file_uploader("1. WAV ses dosyası", type=["wav"])
-
-st.sidebar.subheader("🎚️ SPL Kalibrasyonu (MAX HOLD)")
+st.sidebar.subheader(t("🎚️ SPL Kalibrasyonu (MAX HOLD)", "🎚️ SPL Calibration (MAX HOLD)"))
 reference_leq_db = st.sidebar.number_input(
-    "Maksimum Pik Seviyesi (MAX SPL) [dB]",
+    t("Maksimum Pik Seviyesi (MAX SPL) [dB]", "Maximum Peak Level (MAX SPL) [dB]"),
     min_value=20.0, max_value=140.0, value=80.0, step=0.1,
-    help="Test sırasında Voltcraft cihazındaki 'MAX/MIN' tuşunu kullanarak ekranda sabitlediğiniz en yüksek desibel değerini buraya girin."
+    help=t("Voltcraft cihazından okuduğunuz tepe (peak) desibel değerini girin.", "Enter the peak decibel value read from the Voltcraft device.")
 )
-st.sidebar.caption("Yazılım, dosya içindeki en şiddetli tepe noktasını bu değere eşitleyerek tüm analiz grafiklerini laboratuvar ölçeğine kalibre edecektir.")
 
-st.sidebar.subheader("🏎️ RPM Bilgisi")
-rpm_mode = st.sidebar.radio("RPM tipi", ["Sabit RPM", "Değişken RPM (CSV)"])
+st.sidebar.subheader(t("🏎️ RPM Bilgisi", "🏎️ RPM Information"))
+rpm_mode = st.sidebar.radio(t("RPM tipi", "RPM Type"), [t("Sabit RPM", "Fixed RPM"), t("Değişken RPM (CSV)", "Variable RPM (CSV)")])
 
 fixed_rpm, rpm_dataframe, rpm_column, time_column = None, None, None, None
 
-if rpm_mode == "Sabit RPM":
-    fixed_rpm = st.sidebar.number_input("Sabit dönüş hızı [RPM]", min_value=1.0, value=1500.0, step=10.0)
+if rpm_mode in ["Sabit RPM", "Fixed RPM"]:
+    fixed_rpm = st.sidebar.number_input(t("Sabit dönüş hızı [RPM]", "Fixed rotation speed [RPM]"), min_value=1.0, value=1500.0, step=10.0)
 else:
-    uploaded_rpm = st.sidebar.file_uploader("RPM zaman serisi (.csv)", type=["csv"])
+    uploaded_rpm = st.sidebar.file_uploader(t("RPM zaman serisi (.csv)", "RPM time series (.csv)"), type=["csv"])
     if uploaded_rpm is not None:
         try:
             uploaded_rpm.seek(0)
             rpm_dataframe = pd.read_csv(uploaded_rpm, sep=None, engine="python")
             columns = list(rpm_dataframe.columns)
-            if not columns: raise ValueError("CSV dosyasında sütun bulunamadı.")
+            if not columns: raise ValueError(t("CSV dosyasında sütun bulunamadı.", "No columns found in CSV."))
             rpm_guess = next((c for c in columns if any(k in c.lower() for k in ["rpm", "devir", "speed"])), columns[-1])
-            rpm_column = st.sidebar.selectbox("RPM sütunu", columns, index=columns.index(rpm_guess))
-            time_options = ["<Kayıt süresine eşit dağıt>"] + columns
+            rpm_column = st.sidebar.selectbox(t("RPM sütunu", "RPM column"), columns, index=columns.index(rpm_guess))
+            
+            time_dist_opt = t("<Kayıt süresine eşit dağıt>", "<Distribute evenly over recording time>")
+            time_options = [time_dist_opt] + columns
             time_guess = next((c for c in columns if any(k in c.lower() for k in ["time", "zaman", "sec"])), None)
             default_time_index = time_options.index(time_guess) if time_guess in time_options else 0
-            selected_time = st.sidebar.selectbox("Zaman sütunu", time_options, index=default_time_index)
-            time_column = None if selected_time == "<Kayıt süresine eşit dağıt>" else selected_time
-            st.sidebar.success("RPM CSV dosyası okundu.")
+            selected_time = st.sidebar.selectbox(t("Zaman sütunu", "Time column"), time_options, index=default_time_index)
+            time_column = None if selected_time == time_dist_opt else selected_time
+            st.sidebar.success(t("RPM CSV dosyası okundu.", "RPM CSV successfully read."))
         except Exception as exc:
-            st.sidebar.error(f"RPM CSV okunamadı: {exc}")
+            st.sidebar.error(t(f"RPM CSV okunamadı: {exc}", f"Failed to read RPM CSV: {exc}"))
 
 # ============================================================
 # ANA AKIŞ VE HESAPLAMALAR
 # ============================================================
 if uploaded_audio is None:
-    st.info("ℹ️ Lütfen sol panelden Voltcraft SL-300 cihazı ile kaydettiğiniz bir **.wav** ses dosyasını yükleyin.")
+    st.info(t("ℹ️ Lütfen sol panelden bir **.wav** ses dosyası yükleyin.", "ℹ️ Please upload a **.wav** audio file from the left panel."))
     st.stop()
 
-with st.spinner("Gates Akustik laboratuvarı verileri işleniyor... Lütfen bekleyiniz."):
+with st.spinner(t("Akustik veriler işleniyor... Lütfen bekleyiniz.", "Processing acoustic data... Please wait.")):
     try:
         sample_rate, audio_signal = read_wav_mono(uploaded_audio)
     except Exception as exc:
-        st.error(f"WAV dosyası okunamadı: {exc}")
+        st.error(t(f"WAV dosyası okunamadı: {exc}", f"Failed to read WAV file: {exc}"))
         st.stop()
 
     duration = audio_signal.size / sample_rate
     nyquist = sample_rate / 2.0
 
-    # Arka plan mühendislik standartları (Arayüzden temizlendi)
     default_welch = 16384
     default_stft = 4096
     max_display_frequency = min(20000.0, nyquist)
@@ -362,12 +365,13 @@ with st.spinner("Gates Akustik laboratuvarı verileri işleniyor... Lütfen bekl
             psd_frequencies, psd, reference_leq_db, max_display_frequency
         )
     except Exception as exc:
-        st.error(f"SPL kalibrasyonu yapılamadı: {exc}")
+        st.error(t(f"SPL kalibrasyonu yapılamadı: {exc}", f"SPL calibration failed: {exc}"))
         st.stop()
 
     third_octave_df = third_octave_levels(psd_frequencies, psd, calibration_offset_db, nyquist)
 
-st.success(f"✅ Analiz Tamamlandı! — Süre: **{duration:.2f} s** | Örnekleme: **{sample_rate:,} Hz**")
+st.success(t(f"✅ Analiz Tamamlandı! — Süre: **{duration:.2f} s** | Örnekleme: **{sample_rate:,} Hz**", 
+             f"✅ Analysis Complete! — Duration: **{duration:.2f} s** | Sampling: **{sample_rate:,} Hz**"))
 
 tab_color, tab_order, tab_ai, tab_octave = st.tabs([
     "🌈 COLOR MAPS", "🏎️ ORDER PLOTS", "🧠 ARTICULATION INDEX / SII", "🎼 1/3 OCTAVE BAND PLOTS"
@@ -378,7 +382,7 @@ tab_color, tab_order, tab_ai, tab_octave = st.tabs([
 # ============================================================
 with tab_color:
     try:
-        st.subheader("Color Map — Zaman / Frekans / Seviye")
+        st.subheader(t("Color Map — Zaman / Frekans / Seviye", "Color Map — Time / Frequency / Level"))
         stft_size = choose_segment_size(audio_signal.size, int(default_stft))
         stft_overlap = int(stft_size * 0.75)
 
@@ -393,38 +397,39 @@ with tab_color:
         fig_color = go.Figure(go.Heatmap(
             x=spec_t, y=spec_f[frequency_mask], z=spec_level_db[frequency_mask, :],
             colorscale="Turbo", zmin=reference_leq_db - 80.0, zmax=reference_leq_db + 5.0,
-            colorbar={"title": "Seviye<br>[dB SPL/bin]"}
+            colorbar={"title": t("Seviye<br>[dB]", "Level<br>[dB]")}
         ))
 
         fig_color.update_layout(
-            title="Kalibre Edilmiş Akustik Spektrogram (Logaritmik Ölçek)",
-            xaxis_title="Zaman [s]", yaxis_title="Frekans [Hz]", yaxis_type="log",
+            title=t("Kalibre Edilmiş Akustik Spektrogram (Logaritmik Ölçek)", "Calibrated Acoustic Spectrogram (Logarithmic Scale)"),
+            xaxis_title=t("Zaman [s]", "Time [s]"), yaxis_title=t("Frekans [Hz]", "Frequency [Hz]"), yaxis_type="log",
             height=620, margin=dict(l=40, r=30, t=60, b=40),
             plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
             font=dict(color='#212529', family="Arial, sans-serif")
         )
         st.plotly_chart(fig_color, use_container_width=True)
     except Exception as e:
-        st.error(f"Color Map oluşturulurken bir hata oluştu: {e}")
+        st.error(t(f"Color Map oluşturulurken bir hata oluştu: {e}", f"Error generating Color Map: {e}"))
 
 # ============================================================
 # TAB 2 — ORDER PLOTS
 # ============================================================
 with tab_order:
     try:
-        st.subheader("Order Plots — Dönüş Hızıyla İlişkili Ses Mertebeleri")
+        st.subheader(t("Order Plots — Dönüş Hızıyla İlişkili Ses Mertebeleri", "Order Plots — Rotational Speed-Linked Harmonics"))
         selected_orders = st.multiselect(
-            "Takip edilecek mertebeler", options=[0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0, 6.0, 8.0, 10.0], default=[0.5, 1.0, 2.0, 3.0, 4.0, 5.0]
+            t("Takip edilecek mertebeler", "Orders to follow"), 
+            options=[0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0, 6.0, 8.0, 10.0], default=[0.5, 1.0, 2.0, 3.0, 4.0, 5.0]
         )
 
-        if rpm_mode == "Sabit RPM":
+        if rpm_mode in ["Sabit RPM", "Fixed RPM"]:
             rotation_frequency = float(fixed_rpm) / 60.0
             max_order_possible = min(30.0, nyquist / rotation_frequency)
-            max_order = st.slider("Gösterilecek maksimum order", 1.0, float(max(1.0, max_order_possible)), float(min(10.0, max_order_possible)), 0.5)
+            max_order = st.slider(t("Gösterilecek maksimum order", "Maximum order to display"), 1.0, float(max(1.0, max_order_possible)), float(min(10.0, max_order_possible)), 0.5)
             order_step = 0.05
             
             order_df = order_spectrum_from_psd(psd_frequencies, psd, rotation_frequency, max_order, order_step, calibration_offset_db)
-            fig_order = go.Figure(go.Scatter(x=order_df["order"], y=order_df["level_db_spl"], mode="lines", name="Order spektrumu", line=dict(color="#E61A25", width=2.5)))
+            fig_order = go.Figure(go.Scatter(x=order_df["order"], y=order_df["level_db_spl"], mode="lines", name=t("Order spektrumu", "Order spectrum"), line=dict(color="#E61A25", width=2.5)))
 
             harmonic_x, harmonic_y, harmonic_text = [], [], []
             for so in selected_orders:
@@ -437,11 +442,11 @@ with tab_order:
                     harmonic_text.append(f"{so:g}×")
 
             if harmonic_x:
-                fig_order.add_trace(go.Scatter(x=harmonic_x, y=harmonic_y, mode="markers+text", text=harmonic_text, textposition="top center", marker={"size": 10, "color": "#212529"}, name="Seçili harmonikler"))
+                fig_order.add_trace(go.Scatter(x=harmonic_x, y=harmonic_y, mode="markers+text", text=harmonic_text, textposition="top center", marker={"size": 10, "color": "#212529"}, name=t("Seçili harmonikler", "Selected harmonics")))
 
             fig_order.update_layout(
-                title=f"Order Spectrum — {float(fixed_rpm):.0f} RPM (1× = {rotation_frequency:.2f} Hz)",
-                xaxis_title="Mertebe / Order [× dönme frekansı]", yaxis_title="Bant seviyesi [dB SPL]",
+                title=f"{t('Order Spektrumu', 'Order Spectrum')} — {float(fixed_rpm):.0f} RPM (1× = {rotation_frequency:.2f} Hz)",
+                xaxis_title=t("Mertebe / Order [× dönme frekansı]", "Order [× rotation frequency]"), yaxis_title=t("Bant seviyesi [dB SPL]", "Band level [dB SPL]"),
                 height=560, hovermode="x unified", margin=dict(l=40, r=30, t=70, b=45),
                 plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
                 font=dict(color='#212529', family="Arial, sans-serif"),
@@ -451,9 +456,9 @@ with tab_order:
 
         else:
             if rpm_dataframe is None or rpm_column is None:
-                st.warning("Değişken RPM analizi için sol panelden CSV dosyası yükleyin.")
+                st.warning(t("Değişken RPM analizi için sol panelden CSV dosyası yükleyin.", "Upload a CSV file from the left panel for variable RPM analysis."))
             elif not selected_orders:
-                st.warning("En az bir order seçin.")
+                st.warning(t("En az bir order seçin.", "Please select at least one order."))
             else:
                 rpm_time, rpm_values = prepare_rpm_series(rpm_dataframe, rpm_column, time_column, duration)
                 track_f, track_t, track_psd = spectrogram(audio_signal, fs=sample_rate, window="hann", nperseg=stft_size, noverlap=int(stft_size * 0.75), detrend="constant", scaling="density", mode="psd")
@@ -467,8 +472,8 @@ with tab_order:
                         if col in binned_tracks.columns:
                             fig_tracking.add_trace(go.Scatter(x=binned_tracks["rpm"], y=binned_tracks[col], mode="lines+markers", name=f"{so:g}× Order"))
                     fig_tracking.update_layout(
-                        title="Order Tracking — RPM'e Göre Mertebe Seviyeleri",
-                        xaxis_title="Dönüş hızı [RPM]", yaxis_title="Order bant seviyesi [dB SPL]",
+                        title=t("Order Tracking — RPM'e Göre Mertebe Seviyeleri", "Order Tracking — Harmonic Levels across RPM"),
+                        xaxis_title=t("Dönüş hızı [RPM]", "Rotational Speed [RPM]"), yaxis_title=t("Order bant seviyesi [dB SPL]", "Order band level [dB SPL]"),
                         height=580, hovermode="x unified",
                         colorway=["#E61A25", "#212529", "#BF2026", "#495057", "#ADADAD"],
                         plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
@@ -477,23 +482,31 @@ with tab_order:
                     )
                     st.plotly_chart(fig_tracking, use_container_width=True)
                 else:
-                    st.error("Grafik oluşturmak için devir aralığı yetersiz.")
+                    st.error(t("Grafik oluşturmak için devir aralığı yetersiz.", "Insufficient RPM range to generate tracking plot."))
     except Exception as e:
-        st.error(f"Order analizi yapılırken hata oluştu: {e}")
+        st.error(t(f"Order analizi yapılırken hata oluştu: {e}", f"Error during Order analysis: {e}"))
 
 # ============================================================
 # TAB 3 — ARTICULATION INDEX / SII
 # ============================================================
 with tab_ai:
     try:
-        st.subheader("Articulation Index / Speech Intelligibility Index (%)")
-        vocal_effort = st.selectbox("Standart konuşma eforu", list(SII_SPEECH_SPECTRA.keys()), index=0)
+        st.subheader(t("Articulation Index / Speech Intelligibility Index (%)", "Articulation Index / Speech Intelligibility Index (%)"))
+        
+        speech_efforts_map = {
+            t("Normal", "Normal"): np.array([34.75, 34.27, 25.01, 17.32, 9.33, 1.13]),
+            t("Yükseltilmiş", "Raised"): np.array([38.98, 40.15, 33.86, 25.32, 16.78, 5.07]),
+            t("Yüksek", "Loud"): np.array([41.55, 44.85, 42.16, 34.39, 25.41, 11.39]),
+            t("Bağırma", "Shout"): np.array([42.50, 49.24, 51.31, 44.32, 34.41, 20.72]),
+        }
+        
+        vocal_effort = st.selectbox(t("Standart konuşma eforu", "Standard vocal effort"), list(speech_efforts_map.keys()), index=0)
         octave_noise_levels = octave_band_levels(psd_frequencies, psd, calibration_offset_db, SII_OCTAVE_FREQS)
 
         if np.any(~np.isfinite(octave_noise_levels)):
-            st.warning("Örnekleme frekansı 8 kHz oktav bandını kapsamıyor; SII sonucu hesaplanamadı.")
+            st.warning(t("Örnekleme frekansı 8 kHz oktav bandını kapsamıyor; SII sonucu hesaplanamadı.", "Sample rate does not cover the 8 kHz octave band; SII cannot be calculated."))
         else:
-            sii_table = compute_octave_sii(octave_noise_levels, vocal_effort)
+            sii_table = compute_octave_sii(octave_noise_levels, speech_efforts_map[vocal_effort])
             sii_percent = float(sii_table["contribution"].sum()) * 100.0
 
             fig_sii = go.Figure(go.Indicator(
@@ -512,31 +525,34 @@ with tab_ai:
                 x=[format_frequency(v) for v in sii_table["frequency_hz"]], y=100.0 * sii_table["contribution"], marker_color="#E61A25"
             ))
             fig_contribution.update_layout(
-                title="Frekans Bantlarının SII Katkısı", xaxis_title="Oktav merkez frekansı [Hz]", yaxis_title="SII katkısı [yüzde puan]",
+                title=t("Frekans Bantlarının SII Katkısı", "SII Contribution by Frequency Band"), 
+                xaxis_title=t("Oktav merkez frekansı [Hz]", "Octave center frequency [Hz]"), 
+                yaxis_title=t("SII katkısı [yüzde puan]", "SII contribution [percentage points]"),
                 height=430, bargap=0.12, plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
                 font=dict(color='#212529', family="Arial, sans-serif"), xaxis=dict(showgrid=False), yaxis=dict(showgrid=True, gridcolor='#E0E0E0')
             )
             st.plotly_chart(fig_contribution, use_container_width=True)
 
-            if sii_percent >= 75: st.success(f"İletişim ortamı mükemmel: **%{sii_percent:.1f} SII**.")
-            elif sii_percent >= 45: st.warning(f"İletişim koşula bağlı: **%{sii_percent:.1f} SII**.")
-            else: st.error(f"Gürültü iletişimi güçlü biçimde maskeliyor: **%{sii_percent:.1f} SII**.")
+            if sii_percent >= 75: st.success(t(f"İletişim ortamı mükemmel: **%{sii_percent:.1f} SII**.", f"Communication environment is excellent: **{sii_percent:.1f}% SII**."))
+            elif sii_percent >= 45: st.warning(t(f"İletişim koşula bağlı: **%{sii_percent:.1f} SII**.", f"Communication is conditional: **{sii_percent:.1f}% SII**."))
+            else: st.error(t(f"Gürültü iletişimi güçlü biçimde maskeliyor: **%{sii_percent:.1f} SII**.", f"Noise heavily masks communication: **{sii_percent:.1f}% SII**."))
     except Exception as e:
-        st.error(f"SII Endeksi hesaplanırken hata oluştu: {e}")
+        st.error(t(f"SII Endeksi hesaplanırken hata oluştu: {e}", f"Error calculating SII Index: {e}"))
 
 # ============================================================
 # TAB 4 — 1/3 OCTAVE BAND PLOTS
 # ============================================================
 with tab_octave:
     try:
-        st.subheader("1/3 Octave Band Plot")
+        st.subheader(t("1/3 Octave Band Plot", "1/3 Octave Band Plot"))
         octave_plot_df = third_octave_df[third_octave_df["exact_hz"] <= max_display_frequency].copy()
         octave_plot_df["label"] = octave_plot_df["nominal_hz"].map(format_frequency)
 
         fig_octave = go.Figure(go.Bar(x=octave_plot_df["label"], y=octave_plot_df["level_db_spl"], marker_color="#E61A25"))
         fig_octave.update_layout(
-            title="IEC 61260-1 Mantığıyla 1/3 Oktav Bant Spektrumu",
-            xaxis_title="Nominal merkez frekansı [Hz]", yaxis_title="Bant ses basınç seviyesi [dB SPL]",
+            title=t("IEC 61260-1 Mantığıyla 1/3 Oktav Bant Spektrumu", "1/3 Octave Band Spectrum (IEC 61260-1)"),
+            xaxis_title=t("Nominal merkez frekansı [Hz]", "Nominal center frequency [Hz]"), 
+            yaxis_title=t("Bant ses basınç seviyesi [dB SPL]", "Band sound pressure level [dB SPL]"),
             height=560, bargap=0.08,
             xaxis={"type": "category", "categoryorder": "array", "categoryarray": octave_plot_df["label"].tolist(), "tickangle": -45, "showgrid": False},
             yaxis=dict(showgrid=True, gridcolor='#E0E0E0'),
@@ -546,7 +562,16 @@ with tab_octave:
         )
         st.plotly_chart(fig_octave, use_container_width=True)
 
-        with st.expander("1/3 oktav sonuç tablosu"):
-            st.dataframe(octave_plot_df[["nominal_hz", "exact_hz", "lower_hz", "upper_hz", "level_db_spl"]].round(3), use_container_width=True)
+        with st.expander(t("1/3 oktav sonuç tablosu", "1/3 octave result table")):
+            df_display = octave_plot_df[["nominal_hz", "exact_hz", "lower_hz", "upper_hz", "level_db_spl"]].round(3).copy()
+            df_display.columns = [
+                t("Nominal merkez [Hz]", "Nominal center [Hz]"),
+                t("Exact merkez [Hz]", "Exact center [Hz]"),
+                t("Alt sınır [Hz]", "Lower limit [Hz]"),
+                t("Üst sınır [Hz]", "Upper limit [Hz]"),
+                t("Bant seviyesi [dB SPL]", "Band level [dB SPL]")
+            ]
+            st.dataframe(df_display, use_container_width=True)
+            
     except Exception as e:
-        st.error(f"1/3 Oktav grafiği çizilirken hata oluştu: {e}")
+        st.error(t(f"1/3 Oktav grafiği çizilirken hata oluştu: {e}", f"Error generating 1/3 Octave plot: {e}"))
