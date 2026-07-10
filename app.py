@@ -480,6 +480,10 @@ def bin_tracks_by_rpm(
 # ============================================================
 # SIDEBAR
 # ============================================================
+
+# Firma logosunu yan menünün en üstüne ekliyoruz
+st.sidebar.image("gates_logo.png", use_container_width=True)
+
 st.sidebar.header("📁 Veri Girişi ve Analiz Ayarları")
 
 uploaded_audio = st.sidebar.file_uploader(
