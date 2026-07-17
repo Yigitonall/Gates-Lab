@@ -164,94 +164,94 @@ class GatesReport(FPDF):
 
 def build_pdf_report(report_data, antet_data):
     pdf = GatesReport(antet_data)
-    pdf.alias_nb_pages() # Toplam sayfa sayısı için {nb} kullanımını açar
-    pdf.set_auto_page_break(auto=True, margin=25) # Footer ile çakışmaması için margin'i artırdık
+    pdf.alias_nb_pages()
+    pdf.set_auto_page_break(auto=True, margin=25)
     pdf.add_page()
     
     # ----------------------------------------------------
     # İLK SAYFA ANTETİ (FULL HEADER)
     # ----------------------------------------------------
-    start_y = 10
     # Kırmızı şerit (kalın)
     pdf.set_fill_color(200, 0, 0)
-    pdf.rect(10, start_y, 190, 4, 'F')
+    pdf.rect(10, 10, 190, 4, 'F')
     
-    # Siyah çerçeveli ana kutu
+    # Siyah çerçeveli ana kutu (Yüksekliği çok satırlı metinler için artırıldı)
     pdf.set_draw_color(0, 0, 0)
     pdf.set_line_width(0.5)
-    pdf.rect(10, start_y + 4, 190, 45)
+    pdf.rect(10, 14, 190, 71) # Toplam yükseklik 71mm (Y=85'te bitiyor)
     
     # Kutu içi yatay çizgiler
-    pdf.line(10, start_y + 24, 200, start_y + 24) # Report kısmının altı
-    pdf.line(10, start_y + 29, 200, start_y + 29) # Gri şeritin altı
-    pdf.line(10, start_y + 39, 200, start_y + 39) # Date / Location satırının altı
+    pdf.line(10, 34, 200, 34) # Logo ve Report kısmının altı
+    pdf.line(10, 39, 200, 39) # Gri şeritin altı
+    pdf.line(10, 49, 200, 49) # Subject satırının altı
+    pdf.line(10, 57, 200, 57) # Date / Location satırının altı
+    pdf.line(10, 75, 200, 75) # Author / Dept satırının altı (Dist list üst sınırı)
     
-    # Kutu içi dikey çizgi
-    pdf.line(110, start_y + 29, 110, start_y + 49) # Alt kısmı ikiye bölen çizgi
+    # Kutu içi dikey çizgi (Sadece Date ve Author satırlarını böler)
+    pdf.line(110, 49, 110, 75) 
     
     # İçerik - Report ve Logo
     try:
-        pdf.image("gates_logo.png", x=12, y=start_y + 6, w=0, h=16)
+        pdf.image("gates_logo.png", x=12, y=16, w=0, h=16)
     except:
         pdf.set_font("Arial", 'B', 16)
-        pdf.set_xy(12, start_y + 10)
+        pdf.set_xy(12, 19)
         pdf.cell(30, 10, "GATES")
         
     pdf.set_font("Arial", 'B', 20)
-    pdf.set_xy(80, start_y + 8)
+    pdf.set_xy(80, 18)
     pdf.cell(50, 10, "Report", align='C')
     
     pdf.set_font("Arial", 'B', 10)
-    pdf.set_xy(130, start_y + 5)
-    pdf.cell(68, 10, clean_text_for_fpdf(f"Report-No.: {antet_data['report_no']}"), align='R')
+    pdf.set_xy(130, 16)
+    pdf.cell(68, 10, clean_text_for_fpdf(f"Report-No.: {antet_data.get('report_no', '')}"), align='R')
     
     # Gri taralı şerit
     pdf.set_fill_color(240, 240, 240)
-    pdf.rect(10.25, start_y + 24.25, 189.5, 4.5, 'F')
+    pdf.rect(10.25, 34.25, 189.5, 4.5, 'F')
     
     # Veri giriş alanları
     pdf.set_font("Arial", '', 10)
     
-    # Satır 1: Subject
-    pdf.set_xy(11, start_y + 30)
+    # Satır 1: Subject (Y: 39 - 49)
+    pdf.set_xy(11, 40)
     pdf.cell(20, 5, "Subject:")
     pdf.set_font("Arial", 'B', 12)
-    pdf.set_xy(10, start_y + 32)
-    pdf.cell(190, 5, clean_text_for_fpdf(antet_data['subject']), align='C')
+    pdf.set_xy(10, 42)
+    pdf.cell(190, 5, clean_text_for_fpdf(antet_data.get('subject', '')), align='C')
     
     pdf.set_font("Arial", '', 10)
-    # Satır 2: Date ve Location
-    pdf.set_xy(11, start_y + 40)
-    pdf.cell(15, 8, "Date:")
-    pdf.set_xy(35, start_y + 40)
-    pdf.cell(50, 8, clean_text_for_fpdf(antet_data['date']))
     
-    pdf.set_xy(111, start_y + 40)
-    pdf.cell(20, 8, "Location:")
-    pdf.set_xy(135, start_y + 40)
-    pdf.cell(50, 8, clean_text_for_fpdf(antet_data['location']))
+    # Satır 2: Date ve Location (Y: 49 - 57)
+    pdf.set_xy(11, 50)
+    pdf.cell(15, 6, "Date:")
+    pdf.set_xy(35, 50)
+    pdf.cell(50, 6, clean_text_for_fpdf(antet_data.get('date', '')))
     
-    # Satır 3: Author ve Department
-    pdf.set_xy(11, start_y + 49)
-    pdf.cell(15, 8, "Author:")
-    pdf.set_xy(35, start_y + 50)
-    pdf.multi_cell(70, 4, clean_text_for_fpdf(antet_data['author']))
+    pdf.set_xy(111, 50)
+    pdf.cell(20, 6, "Location:")
+    pdf.set_xy(135, 50)
+    pdf.cell(50, 6, clean_text_for_fpdf(antet_data.get('location', '')))
     
-    pdf.set_xy(111, start_y + 49)
-    pdf.cell(25, 8, "Department:")
-    pdf.set_xy(135, start_y + 50)
-    pdf.multi_cell(60, 4, clean_text_for_fpdf(antet_data['department']))
+    # Satır 3: Author ve Department (Y: 57 - 75) -> Çok satırlı metinlere özel geniş alan
+    pdf.set_xy(11, 58)
+    pdf.cell(15, 6, "Author:")
+    pdf.set_xy(35, 59)
+    pdf.multi_cell(70, 4, clean_text_for_fpdf(antet_data.get('author', '')))
     
-    # Ek dikey/yatay çizgi ve Distribution
-    pdf.line(10, start_y + 59, 200, start_y + 59)
-    pdf.set_xy(11, start_y + 60)
-    pdf.cell(25, 8, "Distribution list:")
-    pdf.set_xy(38, start_y + 60)
-    pdf.cell(100, 8, clean_text_for_fpdf(antet_data['dist_list']))
-    pdf.rect(10, start_y + 59, 190, 10)
+    pdf.set_xy(111, 58)
+    pdf.cell(25, 6, "Department:")
+    pdf.set_xy(135, 59)
+    pdf.multi_cell(60, 4, clean_text_for_fpdf(antet_data.get('department', '')))
+    
+    # Satır 4: Distribution list (Y: 75 - 85)
+    pdf.set_xy(11, 76)
+    pdf.cell(30, 8, "Distribution list:")
+    pdf.set_xy(42, 76)
+    pdf.cell(100, 8, clean_text_for_fpdf(antet_data.get('dist_list', '')))
     
     # Y-pozisyonunu güncelle (Ana içerik buradan başlayacak)
-    pdf.set_y(start_y + 80)
+    pdf.set_y(95)
     # ----------------------------------------------------
 
     # Dosya ve Sistem Verileri
