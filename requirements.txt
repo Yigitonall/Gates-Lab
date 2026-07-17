@@ -3,3 +3,5 @@ plotly
 numpy
 scipy
 pandas
+fpdf
+kaleido
