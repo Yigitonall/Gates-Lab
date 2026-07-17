@@ -485,8 +485,7 @@ with tab_order:
                     st.error(t("Grafik oluşturmak için devir aralığı yetersiz.", "Insufficient RPM range to generate tracking plot."))
     except Exception as e:
         st.error(t(f"Order analizi yapılırken hata oluştu: {e}", f"Error during Order analysis: {e}"))
-
-# --- ORDER PLOT OTOMATİK YORUMLAMA (SMART DIAGNOSTICS) ---
+        # --- ORDER PLOT OTOMATİK YORUMLAMA (SMART DIAGNOSTICS) ---
 st.markdown("### 🤖 Akıllı Teşhis (Auto-Interpretation)")
 if harmonic_x and harmonic_y:
     # En yüksek dB seviyesine sahip mertebeyi bul
@@ -509,6 +508,7 @@ if harmonic_x and harmonic_y:
 
     st.info(t(f"💡 **Bulgu:** En yüksek tepe noktası {max_db:.1f} dB ile {dominant_order}x mertebesinde tespit edildi.\n\n🔍 **Teşhis:** {diag_tr}", 
               f"💡 **Finding:** The highest peak was detected at {dominant_order}x order with {max_db:.1f} dB.\n\n🔍 **Diagnosis:** {diag_en}"))
+
 
 # ============================================================
 # TAB 3 — ARTICULATION INDEX / SII
