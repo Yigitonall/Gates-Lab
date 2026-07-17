@@ -926,33 +926,56 @@ elif st.session_state.app_mode == "compare":
         db_matrix_A = slvl_A[mask_A, :]
         db_matrix_B = slvl_B[mask_B, :]
         
+        # A Dosyası Teşhisi
+        time_var_A = np.var(np.mean(db_matrix_A, axis=0))
+        freq_var_A = np.var(np.mean(db_matrix_A, axis=1))
+        if time_var_A > freq_var_A * 1.5:
+            diag_A_tr, diag_A_en = "Dikey izler tespit edildi. Kök Neden: Anlık vuruntu/darbe.", "Vertical traces detected. Root Cause: Instantaneous knocks/impact."
+        elif freq_var_A > time_var_A * 1.5:
+            diag_A_tr, diag_A_en = "Yatay bantlar tespit edildi. Kök Neden: Sürekli sürtünme/harmonik.", "Horizontal bands detected. Root Cause: Continuous friction/harmonic."
+        else:
+            diag_A_tr, diag_A_en = "Karmaşık geniş bantlı gürültü profili gözlemleniyor.", "Complex broadband noise profile is observed."
+
+        # B Dosyası Teşhisi
+        time_var_B = np.var(np.mean(db_matrix_B, axis=0))
+        freq_var_B = np.var(np.mean(db_matrix_B, axis=1))
+        if time_var_B > freq_var_B * 1.5:
+            diag_B_tr, diag_B_en = "Dikey izler tespit edildi. Kök Neden: Anlık vuruntu/darbe.", "Vertical traces detected. Root Cause: Instantaneous knocks/impact."
+        elif freq_var_B > time_var_B * 1.5:
+            diag_B_tr, diag_B_en = "Yatay bantlar tespit edildi. Kök Neden: Sürekli sürtünme/harmonik.", "Horizontal bands detected. Root Cause: Continuous friction/harmonic."
+        else:
+            diag_B_tr, diag_B_en = "Karmaşık geniş bantlı gürültü profili gözlemleniyor.", "Complex broadband noise profile is observed."
+
+        # Karşılaştırma Teşhisi
         mean_db_A = np.mean(db_matrix_A)
         mean_db_B = np.mean(db_matrix_B)
         diff_mean = mean_db_B - mean_db_A
-        
-        time_var_B = np.var(np.mean(db_matrix_B, axis=0))
-        freq_var_B = np.var(np.mean(db_matrix_B, axis=1))
 
         if diff_mean > 3:
             if time_var_B > freq_var_B * 1.5:
-                diag_tr = f"B dosyasının genel enerjisinde artış (+{diff_mean:.1f} dB) ve zamana bağlı ani vuruntular (dikey izler) gözlemlendi. Kök Neden: Mekanik çarpma veya darbe."
-                diag_en = f"An increase in overall energy (+{diff_mean:.1f} dB) and sudden time-dependent knocks (vertical traces) observed in File B. Root Cause: Mechanical clashing or impact."
+                diag_comp_tr = f"B dosyasında (+{diff_mean:.1f} dB) artış ve vuruntu oluşumu gözlemlendi. Mekanik çarpma/darbe ihtimali."
+                diag_comp_en = f"Energy increase (+{diff_mean:.1f} dB) and knock formation observed in File B. Potential mechanical impact."
             elif freq_var_B > time_var_B * 1.5:
-                diag_tr = f"B dosyasında (+{diff_mean:.1f} dB) enerji artışı ve belirli frekanslarda yoğunlaşma (yatay bantlar) tespit edildi. Kök Neden: Sürekli sürtünme veya harmonik inilti."
-                diag_en = f"Energy increase (+{diff_mean:.1f} dB) and concentration in specific frequencies (horizontal bands) detected in File B. Root Cause: Continuous friction or harmonic whine."
+                diag_comp_tr = f"B dosyasında (+{diff_mean:.1f} dB) artış ve sürtünme/inilti oluşumu tespit edildi."
+                diag_comp_en = f"Energy increase (+{diff_mean:.1f} dB) and friction/whine formation detected in File B."
             else:
-                diag_tr = f"B dosyasında A'ya göre geniş bantlı bir gürültü enerjisi artışı (+{diff_mean:.1f} dB) tespit edildi."
-                diag_en = f"A broadband noise energy increase (+{diff_mean:.1f} dB) was detected in File B compared to A."
+                diag_comp_tr = f"B dosyasında A'ya göre geniş bantlı gürültü enerjisi artışı (+{diff_mean:.1f} dB) tespit edildi."
+                diag_comp_en = f"A broadband noise energy increase (+{diff_mean:.1f} dB) was detected in File B compared to A."
         elif diff_mean < -3:
-            diag_tr = f"B dosyasında A'ya göre genel gürültü enerjisinde iyileşme (düşüş) ({diff_mean:.1f} dB) tespit edildi."
-            diag_en = f"An improvement (decrease) in overall noise energy ({diff_mean:.1f} dB) was detected in File B compared to A."
+            diag_comp_tr = f"B dosyasında A'ya göre genel gürültü enerjisinde iyileşme/düşüş ({diff_mean:.1f} dB) tespit edildi."
+            diag_comp_en = f"An improvement/decrease in overall noise energy ({diff_mean:.1f} dB) was detected in File B compared to A."
         else:
-            diag_tr = "Her iki dosyanın spektrogram (zaman-frekans) enerji dağılımları büyük ölçüde benzerdir."
-            diag_en = "The spectrogram (time-frequency) energy distributions of both files are largely similar."
+            diag_comp_tr = "Her iki dosyanın spektrogram (zaman-frekans) enerji dağılımları büyük ölçüde benzerdir."
+            diag_comp_en = "The spectrogram (time-frequency) energy distributions of both files are largely similar."
 
-        st.info(t(f"💡 **Bulgu:** İki dosya arasındaki ortalama spektral enerji farkı: {diff_mean:+.1f} dB.\n\n🔍 **Kıyaslama Teşhisi:** {diag_tr}", 
-                  f"💡 **Finding:** The average spectral energy difference between the two files: {diff_mean:+.1f} dB.\n\n🔍 **Comparative Diagnosis:** {diag_en}"))
-        report_data["diagnostics"]["Color Map B"] = t(diag_tr, diag_en)
+        final_diag_text = (
+            f"🟦 **A ({uploaded_files[0].name}):** {t(diag_A_tr, diag_A_en)}\n\n"
+            f"🟥 **B ({uploaded_files[1].name}):** {t(diag_B_tr, diag_B_en)}\n\n"
+            f"⚖️ **{t('KARŞILAŞTIRMA', 'COMPARISON')}:** {t(diag_comp_tr, diag_comp_en)}"
+        )
+        
+        st.info(final_diag_text)
+        report_data["diagnostics"]["Color Map B"] = final_diag_text
 
     # --- ORDER PLOTS ---
     with tab_order:
@@ -969,29 +992,55 @@ elif st.session_state.app_mode == "compare":
         st.plotly_chart(fig_ord_comp, use_container_width=True)
         report_data["figures"]["Order Plot"] = fig_ord_comp
 
-        # Teşhis
+        st.markdown(t("### 🤖 Akıllı Teşhis", "### 🤖 Auto-Interpretation"))
         if not ord_df_A.empty and not ord_df_B.empty:
+            # A Dosyası Teşhisi
             max_idx_A = ord_df_A["level_db_spl"].idxmax()
-            max_idx_B = ord_df_B["level_db_spl"].idxmax()
             ord_A_dom = ord_df_A.loc[max_idx_A, "order"]
+            if abs(ord_A_dom - 1.0) < 0.1:
+                diag_A_tr, diag_A_en = "1x (1. Mertebe) baskın. Neden: Ana şaftta Balanssızlık.", "1x (1st Order) dominant. Cause: Main shaft Unbalance."
+            elif abs(ord_A_dom - 2.0) < 0.1:
+                diag_A_tr, diag_A_en = "2x (2. Mertebe) baskın. Neden: Eksen Kaçıklığı/Gevşeklik.", "2x (2nd Order) dominant. Cause: Misalignment/Looseness."
+            elif ord_A_dom % 1 != 0:
+                diag_A_tr, diag_A_en = f"{ord_A_dom}x (Küsuratlı) baskın. Neden: Rulman/Kayış.", f"{ord_A_dom}x (Fractional) dominant. Cause: Bearing/Belt."
+            else:
+                diag_A_tr, diag_A_en = f"{ord_A_dom}x (Tam Sayı) baskın. Spesifik parçaları inceleyin.", f"{ord_A_dom}x (Integer) dominant. Investigate specific parts."
+
+            # B Dosyası Teşhisi
+            max_idx_B = ord_df_B["level_db_spl"].idxmax()
             ord_B_dom = ord_df_B.loc[max_idx_B, "order"]
+            if abs(ord_B_dom - 1.0) < 0.1:
+                diag_B_tr, diag_B_en = "1x (1. Mertebe) baskın. Neden: Ana şaftta Balanssızlık.", "1x (1st Order) dominant. Cause: Main shaft Unbalance."
+            elif abs(ord_B_dom - 2.0) < 0.1:
+                diag_B_tr, diag_B_en = "2x (2. Mertebe) baskın. Neden: Eksen Kaçıklığı/Gevşeklik.", "2x (2nd Order) dominant. Cause: Misalignment/Looseness."
+            elif ord_B_dom % 1 != 0:
+                diag_B_tr, diag_B_en = f"{ord_B_dom}x (Küsuratlı) baskın. Neden: Rulman/Kayış.", f"{ord_B_dom}x (Fractional) dominant. Cause: Bearing/Belt."
+            else:
+                diag_B_tr, diag_B_en = f"{ord_B_dom}x (Tam Sayı) baskın. Spesifik parçaları inceleyin.", f"{ord_B_dom}x (Integer) dominant. Investigate specific parts."
+
+            # Karşılaştırma Teşhisi
             val_A = ord_df_A.loc[max_idx_B, "level_db_spl"] # B'nin zirve yaptığı noktadaki A'nın değeri
             val_B = ord_df_B.loc[max_idx_B, "level_db_spl"]
             diff = val_B - val_A
 
             if diff > 3:
-                diag_tr = f"B dosyasında {ord_B_dom}x mertebesinde, A dosyasına göre **+{diff:.1f} dB artış** tespit edildi. Bu durum B parçasında mekanik bir aşınma/bozulma olduğunu gösterir."
-                diag_en = f"A **+{diff:.1f} dB increase** was detected in File B at order {ord_B_dom}x compared to File A. This indicates mechanical wear/degradation in part B."
+                diag_comp_tr = f"B dosyasında {ord_B_dom}x mertebesinde, A'ya göre +{diff:.1f} dB artış tespit edildi. Mekanik aşınma/bozulma mevcut."
+                diag_comp_en = f"A +{diff:.1f} dB increase was detected in File B at order {ord_B_dom}x compared to A. Mechanical wear present."
             elif diff < -3:
-                diag_tr = f"B dosyasında gürültü {ord_B_dom}x mertebesinde A'ya göre **{abs(diff):.1f} dB iyileşmiş** (düşmüş)."
-                diag_en = f"The noise in File B has **improved (decreased) by {abs(diff):.1f} dB** at order {ord_B_dom}x compared to A."
+                diag_comp_tr = f"B dosyasında {ord_B_dom}x mertebesinde A'ya göre {abs(diff):.1f} dB iyileşme (düşüş) mevcut."
+                diag_comp_en = f"The noise in File B has improved by {abs(diff):.1f} dB at order {ord_B_dom}x compared to A."
             else:
-                diag_tr = "Her iki dosyanın mertebe gürültü seviyeleri genel olarak benzer karakteristikte."
-                diag_en = "The order noise levels of both files have generally similar characteristics."
+                diag_comp_tr = "Her iki dosyanın mertebe gürültü seviyeleri benzer karakteristikte."
+                diag_comp_en = "The order noise levels of both files have similar characteristics."
 
-            st.info(t(f"💡 **Bulgu:** B dosyasındaki en baskın tepe noktası {ord_B_dom}x.\n\n🔍 **Kıyaslama Teşhisi:** {diag_tr}", 
-                      f"💡 **Finding:** The most dominant peak in File B is {ord_B_dom}x.\n\n🔍 **Comparative Diagnosis:** {diag_en}"))
-            report_data["diagnostics"]["Order Plot"] = t(diag_tr, diag_en)
+            final_diag_text = (
+                f"🟦 **A ({uploaded_files[0].name}):** {t(diag_A_tr, diag_A_en)}\n\n"
+                f"🟥 **B ({uploaded_files[1].name}):** {t(diag_B_tr, diag_B_en)}\n\n"
+                f"⚖️ **{t('KARŞILAŞTIRMA', 'COMPARISON')}:** {t(diag_comp_tr, diag_comp_en)}"
+            )
+            
+            st.info(final_diag_text)
+            report_data["diagnostics"]["Order Plot"] = final_diag_text
 
     # --- SII COMP ---
     with tab_ai:
@@ -1029,21 +1078,39 @@ elif st.session_state.app_mode == "compare":
         fig_sii_bands.add_trace(go.Bar(x=[format_frequency(v) for v in sii_df_B["frequency_hz"]], y=100.0 * sii_df_B["contribution"], name="File B", marker_color="#E61A25"))
         fig_sii_bands.update_layout(title="SII Katkısı (A vs B)", barmode='group', height=400, xaxis_type='category')
         st.plotly_chart(fig_sii_bands, use_container_width=True)
-        report_data["figures"]["SII Bands"] = fig_sii_bands
 
+        st.markdown(t("### 🤖 Akıllı Teşhis", "### 🤖 Auto-Interpretation"))
+        
+        # A Dosyası Teşhisi
+        if sii_pct_A >= 75: diag_A_tr, diag_A_en = "%100 güvenli ve konforlu iletişim bölgesi.", "100% safe and comfortable communication zone."
+        elif sii_pct_A >= 45: diag_A_tr, diag_A_en = "İletişim kısmen maskeleniyor.", "Communication is partially masked."
+        else: diag_A_tr, diag_A_en = "İletişim tamamen yutuluyor (İzolasyon zorunlu).", "Communication is completely swallowed (Insulation mandatory)."
+        
+        # B Dosyası Teşhisi
+        if sii_pct_B >= 75: diag_B_tr, diag_B_en = "%100 güvenli ve konforlu iletişim bölgesi.", "100% safe and comfortable communication zone."
+        elif sii_pct_B >= 45: diag_B_tr, diag_B_en = "İletişim kısmen maskeleniyor.", "Communication is partially masked."
+        else: diag_B_tr, diag_B_en = "İletişim tamamen yutuluyor (İzolasyon zorunlu).", "Communication is completely swallowed (Insulation mandatory)."
+
+        # Karşılaştırma Teşhisi
         diff_sii = sii_pct_B - sii_pct_A
         if diff_sii < -10:
-            diag_tr = f"B dosyasında makine gürültüsü, A dosyasına göre **%{abs(diff_sii):.1f} daha fazla maskeleme** yapıyor. İletişim ergonomisi kötüleşmiş."
-            diag_en = f"Machine noise in File B masks human communication **{abs(diff_sii):.1f}% more** than File A. Communication ergonomics have worsened."
+            diag_comp_tr = f"B dosyasında makine gürültüsü, A'ya göre iletişimi %{abs(diff_sii):.1f} daha fazla engelliyor."
+            diag_comp_en = f"Machine noise in File B masks communication {abs(diff_sii):.1f}% more than File A."
         elif diff_sii > 10:
-            diag_tr = f"B dosyasında makine gürültüsü azalmış ve iletişim ortamı **%{diff_sii:.1f} oranında iyileşmiş**."
-            diag_en = f"Machine noise has decreased in File B, and the communication environment has **improved by {diff_sii:.1f}%**."
+            diag_comp_tr = f"B dosyasında makine gürültüsü azalmış ve iletişim ortamı %{diff_sii:.1f} iyileşmiş."
+            diag_comp_en = f"Machine noise has decreased in File B, and communication improved by {diff_sii:.1f}%."
         else:
-            diag_tr = "İki dosya arasında insan iletişimini engelleme açısından belirgin bir fark yoktur."
-            diag_en = "There is no significant difference between the two files in terms of hindering human communication."
+            diag_comp_tr = "İki dosya arasında insan iletişimini engelleme açısından belirgin bir fark yoktur."
+            diag_comp_en = "No significant difference between the two files in terms of hindering communication."
 
-        st.info(t(f"🔍 **Kıyaslama Teşhisi:** {diag_tr}", f"🔍 **Comparative Diagnosis:** {diag_en}"))
-        report_data["diagnostics"]["SII"] = t(diag_tr, diag_en)
+        final_diag_text = (
+            f"🟦 **A ({uploaded_files[0].name}) [SII: %{sii_pct_A:.1f}]:** {t(diag_A_tr, diag_A_en)}\n\n"
+            f"🟥 **B ({uploaded_files[1].name}) [SII: %{sii_pct_B:.1f}]:** {t(diag_B_tr, diag_B_en)}\n\n"
+            f"⚖️ **{t('KARŞILAŞTIRMA', 'COMPARISON')}:** {t(diag_comp_tr, diag_comp_en)}"
+        )
+
+        st.info(final_diag_text)
+        report_data["diagnostics"]["SII"] = final_diag_text
 
     # --- OCTAVE COMP ---
     with tab_octave:
@@ -1055,31 +1122,47 @@ elif st.session_state.app_mode == "compare":
         fig_oct_comp.add_trace(go.Bar(x=oct_df_B["nominal_hz"].map(format_frequency), y=oct_df_B["level_db_spl"], name="File B", marker_color="#E61A25"))
         fig_oct_comp.update_layout(title="1/3 Oktav Spektrumu (A vs B)", barmode='group', height=500, xaxis_type='category', xaxis_tickangle=-45)
         st.plotly_chart(fig_oct_comp, use_container_width=True)
-        report_data["figures"]["1/3 Octave"] = fig_oct_comp
 
+        st.markdown(t("### 🤖 Akıllı Teşhis", "### 🤖 Auto-Interpretation"))
         low_mask = (oct_df_A["nominal_hz"] >= 20) & (oct_df_A["nominal_hz"] <= 250)
         hi_mask = (oct_df_A["nominal_hz"] >= 2000) & (oct_df_A["nominal_hz"] <= 10000)
         
+        # A Dosyası Teşhisi
         low_A = 10 * np.log10(np.sum(10 ** (oct_df_A.loc[low_mask, "level_db_spl"] / 10)))
         hi_A = 10 * np.log10(np.sum(10 ** (oct_df_A.loc[hi_mask, "level_db_spl"] / 10)))
+        if low_A > hi_A + 5: diag_A_tr, diag_A_en = "Düşük frekanslar baskın (Yapısal titreşim / Uğultu).", "Low frequencies dominant (Structural vibration / Rumble)."
+        elif hi_A > low_A + 5: diag_A_tr, diag_A_en = "Yüksek frekanslar baskın (Sürtünme / Tiz ıslık).", "High frequencies dominant (Friction / High-pitched whistle)."
+        else: diag_A_tr, diag_A_en = "Düşük ve yüksek frekanslar arasında dengeli dağılım.", "Balanced distribution between low and high frequencies."
+
+        # B Dosyası Teşhisi
         low_B = 10 * np.log10(np.sum(10 ** (oct_df_B.loc[low_mask, "level_db_spl"] / 10)))
         hi_B = 10 * np.log10(np.sum(10 ** (oct_df_B.loc[hi_mask, "level_db_spl"] / 10)))
+        if low_B > hi_B + 5: diag_B_tr, diag_B_en = "Düşük frekanslar baskın (Yapısal titreşim / Uğultu).", "Low frequencies dominant (Structural vibration / Rumble)."
+        elif hi_B > low_B + 5: diag_B_tr, diag_B_en = "Yüksek frekanslar baskın (Sürtünme / Tiz ıslık).", "High frequencies dominant (Friction / High-pitched whistle)."
+        else: diag_B_tr, diag_B_en = "Düşük ve yüksek frekanslar arasında dengeli dağılım.", "Balanced distribution between low and high frequencies."
 
+        # Karşılaştırma Teşhisi
         diff_low = low_B - low_A
         diff_hi = hi_B - hi_A
 
         if diff_hi > 3 and diff_hi > diff_low:
-            diag_tr = "Test dosyasında (B), yüksek frekanslarda (sürtünme/ıslık) referansa (A) göre ciddi artış var."
-            diag_en = "In the test file (B), there is a significant increase in high frequencies (friction/whistle) compared to the reference (A)."
+            diag_comp_tr = "Test dosyasında (B), yüksek frekanslarda (sürtünme/ıslık) referansa (A) göre ciddi artış var."
+            diag_comp_en = "In the test file (B), there is a significant increase in high frequencies (friction/whistle) compared to the reference (A)."
         elif diff_low > 3 and diff_low > diff_hi:
-            diag_tr = "Test dosyasında (B), düşük frekanslarda (uğultu/titreşim) referansa (A) göre ciddi artış var."
-            diag_en = "In the test file (B), there is a significant increase in low frequencies (rumble/vibration) compared to the reference (A)."
+            diag_comp_tr = "Test dosyasında (B), düşük frekanslarda (uğultu/titreşim) referansa (A) göre ciddi artış var."
+            diag_comp_en = "In the test file (B), there is a significant increase in low frequencies (rumble/vibration) compared to the reference (A)."
         else:
-            diag_tr = "Frekans bantlarındaki genel enerji değişimleri orantılı veya birbirine yakındır."
-            diag_en = "The overall energy changes in the frequency bands are proportional or close to each other."
+            diag_comp_tr = "Frekans bantlarındaki genel enerji değişimleri orantılı veya birbirine yakındır."
+            diag_comp_en = "The overall energy changes in the frequency bands are proportional or close to each other."
 
-        st.info(t(f"🔍 **Kıyaslama Teşhisi:** {diag_tr}", f"🔍 **Comparative Diagnosis:** {diag_en}"))
-        report_data["diagnostics"]["1/3 Octave"] = t(diag_tr, diag_en)
+        final_diag_text = (
+            f"🟦 **A ({uploaded_files[0].name}):** {t(diag_A_tr, diag_A_en)}\n\n"
+            f"🟥 **B ({uploaded_files[1].name}):** {t(diag_B_tr, diag_B_en)}\n\n"
+            f"⚖️ **{t('KARŞILAŞTIRMA', 'COMPARISON')}:** {t(diag_comp_tr, diag_comp_en)}"
+        )
+
+        st.info(final_diag_text)
+        report_data["diagnostics"]["1/3 Octave"] = final_diag_text
 
     if PDF_ENABLED:
         st.sidebar.markdown("---")
