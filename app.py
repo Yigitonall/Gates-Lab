@@ -148,7 +148,7 @@ def build_pdf_report(report_data):
     pdf.cell(0, 8, clean_text_for_fpdf(f"RPM Info: {report_data['rpm_info']}"), ln=True)
     pdf.ln(10)
     
-    for section in ["Color Map", "Order Plot", "SII", "1/3 Octave"]:
+    for section in ["Color Map", "Order Plot", "SII (Gauge)", "SII (Bands)", "1/3 Octave"]:
         if section in report_data["figures"]:
             pdf.add_page()
             pdf.set_font("Arial", 'B', 14)
@@ -573,6 +573,7 @@ with tab_ai:
     ))
     fig_sii.update_layout(height=430, paper_bgcolor='rgba(0,0,0,0)', font=dict(family="Arial, sans-serif"))
     st.plotly_chart(fig_sii, use_container_width=True)
+    report_data["figures"]["SII (Gauge)"] = fig_sii
 
     fig_contribution = go.Figure(go.Bar(x=[format_frequency(v) for v in sii_table["frequency_hz"]], y=100.0 * sii_table["contribution"], marker_color="#E61A25"))
     fig_contribution.update_layout(
@@ -584,7 +585,7 @@ with tab_ai:
         xaxis=dict(showgrid=False), yaxis=dict(showgrid=True, gridcolor='#E0E0E0')
     )
     st.plotly_chart(fig_contribution, use_container_width=True)
-    report_data["figures"]["SII"] = fig_contribution
+    report_data["figures"]["SII (Bands)"] = fig_contribution
 
     st.markdown("### 🤖 Akıllı Teşhis (Auto-Interpretation)")
     if sii_percent >= 75: diag_tr = "Makine çalışma gürültüsü, insan iletişimini engellemiyor. İş güvenliği açısından **%100 güvenli ve konforlu bölge**."
@@ -592,7 +593,7 @@ with tab_ai:
     else: diag_tr = "Makine gürültüsü insan sesini tamamen yutuyor. Operatörler için **kulaklık/yalıtım kesinlikle zorunludur**."
     
     st.info(t(f"💡 **Bulgu:** SII Değeri %{sii_percent:.1f}.\n\n🔍 **Teşhis:** {diag_tr}", f"🔍 **Diagnosis:** {diag_tr}"))
-    report_data["diagnostics"]["SII"] = diag_tr
+    report_data["diagnostics"]["SII (Bands)"] = diag_tr
 
 # ============================================================
 # TAB 4 — 1/3 OCTAVE BAND PLOTS
