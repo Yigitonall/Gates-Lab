@@ -12,6 +12,10 @@ import streamlit as st
 from scipy.io import wavfile
 from scipy.signal import spectrogram, welch
 
+# Kaleido'nun bulut sunucularda donmasını engellemek için güvenlik ayarı
+import plotly.io as pio
+pio.kaleido.scope.mathjax = None
+
 try:
     from fpdf import FPDF
     PDF_ENABLED = True
@@ -99,66 +103,53 @@ class GatesReport(FPDF):
         self.antet_data = antet_data
         
     def header(self):
-        # Sadece 1. sayfadan sonraki sayfalarda bu basit anteti göster
+        # 1. sayfa hariç diğer sayfalardaki dar logo anteti
         if self.page_no() > 1 and self.antet_data:
-            # Kırmızı üst şerit
             self.set_fill_color(200, 0, 0)
             self.rect(10, 10, 190, 2, 'F')
             
-            # Logo alanı
             try:
-                self.image("gates_logo.png", x=11, y=13, w=0, h=14)
+                # Logoyu taşırmamak için aspect-ratio korunarak yükseklik 12mm yapıldı
+                self.image("gates_logo.png", x=11, y=13, w=0, h=12)
             except:
                 self.set_font("Arial", 'B', 14)
                 self.set_xy(11, 16)
                 self.cell(35, 10, "GATES")
                 
-            # Ortada Report Yazısı
             self.set_font("Arial", 'B', 16)
             self.set_xy(80, 14)
             self.cell(50, 10, "Report", align='C')
             
-            # Sağda Report-No
             self.set_font("Arial", 'B', 10)
-            self.set_xy(140, 14)
-            self.cell(60, 10, clean_text_for_fpdf(f"Report-No.: {self.antet_data.get('report_no', '')}"), align='R')
+            self.set_xy(130, 14)
+            self.cell(70, 10, clean_text_for_fpdf(f"Report-No.: {self.antet_data.get('report_no', '')}"), align='R')
             
-            # Alt gri şerit
             self.set_fill_color(240, 240, 240)
             self.rect(10, 28, 190, 3, 'F')
-            
             self.ln(10)
             
     def footer(self):
-        # Sayfanın en altından 20mm yukarıya çık
+        # Tüm sayfaların altındaki çerçeveli bölüm (Footer)
         self.set_y(-20)
         self.set_font("Arial", "", 8)
         
-        # Siyah çerçeve ayarı
         self.set_draw_color(0, 0, 0)
         self.set_line_width(0.5)
         
-        # Kutuların Koordinatları (Genişlik 190mm)
         box_x = 10
         box_y = self.get_y()
         box_w = 190
         box_h = 10
         
-        # Dış Çerçeveyi Çiz
         self.rect(box_x, box_y, box_w, box_h)
-        
-        # İç Dikey Çizgi (Sol kısımdan 160mm sonrasına çekilir, sağa 30mm kalır)
         self.line(box_x + 160, box_y, box_x + 160, box_y + box_h)
         
-        # Sol Alan (Dosya Yolu ve Geçerlilik Metni)
         path_text = clean_text_for_fpdf(self.antet_data.get('file_path', ''))
         valid_text = "This document was created electronically and is valid without signature."
         
         self.set_xy(box_x, box_y + 1)
-        # Metni ortalayarak sığdırıyoruz
         self.multi_cell(160, 4, f"{path_text}\n{valid_text}", align='C')
         
-        # Sağ Alan (Sayfa Numarası)
         self.set_xy(box_x + 160, box_y)
         self.cell(30, box_h, f"Page: {self.page_no()} of {{nb}}", align='C')
 
@@ -171,26 +162,24 @@ def build_pdf_report(report_data, antet_data):
     # ----------------------------------------------------
     # İLK SAYFA ANTETİ (FULL HEADER)
     # ----------------------------------------------------
-    # Kırmızı şerit (kalın)
     pdf.set_fill_color(200, 0, 0)
     pdf.rect(10, 10, 190, 4, 'F')
     
-    # Siyah çerçeveli ana kutu (Yüksekliği çok satırlı metinler için artırıldı)
+    # Siyah çerçeveli ana kutu (Yükseklik 80mm'ye genişletildi, taşıma önlendi)
     pdf.set_draw_color(0, 0, 0)
     pdf.set_line_width(0.5)
-    pdf.rect(10, 14, 190, 71) # Toplam yükseklik 71mm (Y=85'te bitiyor)
+    pdf.rect(10, 14, 190, 80)
     
     # Kutu içi yatay çizgiler
-    pdf.line(10, 34, 200, 34) # Logo ve Report kısmının altı
-    pdf.line(10, 39, 200, 39) # Gri şeritin altı
-    pdf.line(10, 49, 200, 49) # Subject satırının altı
-    pdf.line(10, 57, 200, 57) # Date / Location satırının altı
-    pdf.line(10, 75, 200, 75) # Author / Dept satırının altı (Dist list üst sınırı)
+    pdf.line(10, 34, 200, 34) # Logo/Report altı
+    pdf.line(10, 44, 200, 44) # Subject altı
+    pdf.line(10, 56, 200, 56) # Date/Location altı
+    pdf.line(10, 80, 200, 80) # Author/Dept altı
     
-    # Kutu içi dikey çizgi (Sadece Date ve Author satırlarını böler)
-    pdf.line(110, 49, 110, 75) 
+    # Dikey çizgi
+    pdf.line(110, 44, 110, 80) 
     
-    # İçerik - Report ve Logo
+    # Logo
     try:
         pdf.image("gates_logo.png", x=12, y=16, w=0, h=16)
     except:
@@ -206,55 +195,47 @@ def build_pdf_report(report_data, antet_data):
     pdf.set_xy(130, 16)
     pdf.cell(68, 10, clean_text_for_fpdf(f"Report-No.: {antet_data.get('report_no', '')}"), align='R')
     
-    # Gri taralı şerit
     pdf.set_fill_color(240, 240, 240)
-    pdf.rect(10.25, 34.25, 189.5, 4.5, 'F')
+    pdf.rect(10.25, 34.25, 189.5, 9.5, 'F')
     
     # Veri giriş alanları
     pdf.set_font("Arial", '', 10)
-    
-    # Satır 1: Subject (Y: 39 - 49)
-    pdf.set_xy(11, 40)
+    pdf.set_xy(11, 36)
     pdf.cell(20, 5, "Subject:")
     pdf.set_font("Arial", 'B', 12)
-    pdf.set_xy(10, 42)
-    pdf.cell(190, 5, clean_text_for_fpdf(antet_data.get('subject', '')), align='C')
+    pdf.set_xy(35, 36)
+    pdf.cell(160, 5, clean_text_for_fpdf(antet_data.get('subject', '')), align='C')
     
     pdf.set_font("Arial", '', 10)
+    pdf.set_xy(11, 47)
+    pdf.cell(15, 5, "Date:")
+    pdf.set_xy(35, 47)
+    pdf.cell(50, 5, clean_text_for_fpdf(antet_data.get('date', '')))
     
-    # Satır 2: Date ve Location (Y: 49 - 57)
-    pdf.set_xy(11, 50)
-    pdf.cell(15, 6, "Date:")
-    pdf.set_xy(35, 50)
-    pdf.cell(50, 6, clean_text_for_fpdf(antet_data.get('date', '')))
+    pdf.set_xy(111, 47)
+    pdf.cell(20, 5, "Location:")
+    pdf.set_xy(135, 47)
+    pdf.cell(50, 5, clean_text_for_fpdf(antet_data.get('location', '')))
     
-    pdf.set_xy(111, 50)
-    pdf.cell(20, 6, "Location:")
-    pdf.set_xy(135, 50)
-    pdf.cell(50, 6, clean_text_for_fpdf(antet_data.get('location', '')))
-    
-    # Satır 3: Author ve Department (Y: 57 - 75) -> Çok satırlı metinlere özel geniş alan
-    pdf.set_xy(11, 58)
-    pdf.cell(15, 6, "Author:")
+    pdf.set_xy(11, 59)
+    pdf.cell(15, 5, "Author:")
     pdf.set_xy(35, 59)
-    pdf.multi_cell(70, 4, clean_text_for_fpdf(antet_data.get('author', '')))
+    pdf.multi_cell(70, 5, clean_text_for_fpdf(antet_data.get('author', '')))
     
-    pdf.set_xy(111, 58)
-    pdf.cell(25, 6, "Department:")
+    pdf.set_xy(111, 59)
+    pdf.cell(25, 5, "Department:")
     pdf.set_xy(135, 59)
-    pdf.multi_cell(60, 4, clean_text_for_fpdf(antet_data.get('department', '')))
+    pdf.multi_cell(60, 5, clean_text_for_fpdf(antet_data.get('department', '')))
     
-    # Satır 4: Distribution list (Y: 75 - 85)
-    pdf.set_xy(11, 76)
-    pdf.cell(30, 8, "Distribution list:")
-    pdf.set_xy(42, 76)
-    pdf.cell(100, 8, clean_text_for_fpdf(antet_data.get('dist_list', '')))
+    pdf.set_xy(11, 84)
+    pdf.cell(30, 5, "Distribution list:")
+    pdf.set_xy(42, 84)
+    pdf.multi_cell(150, 5, clean_text_for_fpdf(antet_data.get('dist_list', '')))
     
     # Y-pozisyonunu güncelle (Ana içerik buradan başlayacak)
-    pdf.set_y(95)
+    pdf.set_y(105)
     # ----------------------------------------------------
 
-    # Dosya ve Sistem Verileri
     pdf.set_font("Arial", 'B', 12)
     pdf.cell(0, 8, "Test File & System Parameters", ln=True)
     pdf.set_font("Arial", '', 11)
@@ -263,13 +244,12 @@ def build_pdf_report(report_data, antet_data):
     pdf.cell(0, 6, clean_text_for_fpdf(f"RPM Info: {report_data['rpm_info']}"), ln=True)
     pdf.ln(10)
     
-    # Grafikler ve Yorumlar
-    # SII iki farklı grafik ürettiği için özel liste
+    # Grafikler
     render_sequence = [
         ("Color Map", "Color Map"),
         ("Order Plot", "Order Plot"),
-        ("SII Gauge", "SII Gauge"),
-        ("SII Contribution", "SII"),
+        ("SII Gauge", "SII"), # Hız Göstergesi
+        ("SII Contribution", "SII"), # Çubuk Grafik
         ("1/3 Octave", "1/3 Octave")
     ]
 
@@ -288,15 +268,12 @@ def build_pdf_report(report_data, antet_data):
             os.remove(tmp_img_path)
             pdf.ln(5)
             
-            # Teşhis metni varsa grafiğin altına ekle
             if diag_key in report_data["diagnostics"]:
                 pdf.set_font("Arial", '', 11)
                 diag_text = "Diagnosis / Teshis: " + report_data["diagnostics"][diag_key]
                 pdf.multi_cell(0, 6, clean_text_for_fpdf(diag_text))
-                # Aynı teşhis metnini tekrar yazmamak için siliyoruz
                 del report_data["diagnostics"][diag_key]
     
-    # PDF'i Byte'a Çevir
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_pdf:
         pdf.output(tmp_pdf.name)
         with open(tmp_pdf.name, "rb") as f:
@@ -516,9 +493,7 @@ else:
             st.sidebar.error(t(f"RPM CSV okunamadı: {exc}", f"Failed to read RPM CSV: {exc}"))
 
 st.sidebar.markdown("---")
-# ============================================================
-# ANALİZ BUTONU VE PDF OLUŞTURMA BUTONU
-# ============================================================
+
 if st.sidebar.button(t("🚀 Analiz Yap", "🚀 Run Analysis"), type="primary", use_container_width=True):
     if uploaded_audio is not None:
         st.session_state.analyze = True
@@ -540,7 +515,12 @@ if not st.session_state.analyze:
     st.stop()
 
 with st.spinner(t("Akustik veriler işleniyor... Lütfen bekleyiniz.", "Processing acoustic data... Please wait.")):
-    sample_rate, audio_signal = read_wav_mono(uploaded_audio)
+    try:
+        sample_rate, audio_signal = read_wav_mono(uploaded_audio)
+    except Exception as exc:
+        st.error(t(f"WAV dosyası okunamadı: {exc}", f"Failed to read WAV file: {exc}"))
+        st.stop()
+
     duration = audio_signal.size / sample_rate
     nyquist = sample_rate / 2.0
     default_welch, default_stft = 16384, 4096
@@ -549,13 +529,18 @@ with st.spinner(t("Akustik veriler işleniyor... Lütfen bekleyiniz.", "Processi
     welch_overlap = welch_size // 2
 
     psd_frequencies, psd = welch(audio_signal, fs=sample_rate, window="hann", nperseg=welch_size, noverlap=welch_overlap, detrend="constant", scaling="density", return_onesided=True)
-    calibration_offset_db, raw_recording_level_db = calculate_calibration_offset(psd_frequencies, psd, reference_leq_db, max_display_frequency)
+    
+    try:
+        calibration_offset_db, raw_recording_level_db = calculate_calibration_offset(psd_frequencies, psd, reference_leq_db, max_display_frequency)
+    except Exception as exc:
+        st.error(t(f"SPL kalibrasyonu yapılamadı: {exc}", f"SPL calibration failed: {exc}"))
+        st.stop()
+        
     third_octave_df = third_octave_levels(psd_frequencies, psd, calibration_offset_db, nyquist)
 
 st.success(t(f"✅ Analiz Tamamlandı! — Süre: **{duration:.2f} s** | Örnekleme: **{sample_rate:,} Hz**", 
              f"✅ Analysis Complete! — Duration: **{duration:.2f} s** | Sampling: **{sample_rate:,} Hz**"))
 
-# PDF Raporu İçin Ortak Veri Deposu
 report_data = {
     "file_name": uploaded_audio.name,
     "max_spl": reference_leq_db,
@@ -570,152 +555,164 @@ tab_color, tab_order, tab_ai, tab_octave = st.tabs(["🌈 COLOR MAPS", "🏎️ 
 # TAB 1 — COLOR MAPS
 # ============================================================
 with tab_color:
-    stft_size = choose_segment_size(audio_signal.size, int(default_stft))
-    stft_overlap = int(stft_size * 0.75)
-    spec_f, spec_t, spec_psd = spectrogram(audio_signal, fs=sample_rate, window="hann", nperseg=stft_size, noverlap=stft_overlap, detrend="constant", scaling="density", mode="psd")
-    spec_df = spec_f[1] - spec_f[0] if spec_f.size > 1 else 1.0
-    spec_level_db = power_to_db(spec_psd * spec_df, calibration_offset_db)
-    frequency_mask = (spec_f >= 20.0) & (spec_f <= max_display_frequency)
+    try:
+        stft_size = choose_segment_size(audio_signal.size, int(default_stft))
+        stft_overlap = int(stft_size * 0.75)
+        spec_f, spec_t, spec_psd = spectrogram(audio_signal, fs=sample_rate, window="hann", nperseg=stft_size, noverlap=stft_overlap, detrend="constant", scaling="density", mode="psd")
+        spec_df = spec_f[1] - spec_f[0] if spec_f.size > 1 else 1.0
+        spec_level_db = power_to_db(spec_psd * spec_df, calibration_offset_db)
+        frequency_mask = (spec_f >= 20.0) & (spec_f <= max_display_frequency)
 
-    fig_color = go.Figure(go.Heatmap(x=spec_t, y=spec_f[frequency_mask], z=spec_level_db[frequency_mask, :], colorscale="Turbo", zmin=reference_leq_db - 80.0, zmax=reference_leq_db + 5.0, colorbar={"title": t("Seviye<br>[dB]", "Level<br>[dB]")}))
-    fig_color.update_layout(title=t("Kalibre Edilmiş Akustik Spektrogram (Logaritmik Ölçek)", "Calibrated Acoustic Spectrogram (Logarithmic Scale)"), xaxis_title=t("Zaman [s]", "Time [s]"), yaxis_title=t("Frekans [Hz]", "Frequency [Hz]"), yaxis_type="log", height=620)
-    st.plotly_chart(fig_color, use_container_width=True)
+        fig_color = go.Figure(go.Heatmap(x=spec_t, y=spec_f[frequency_mask], z=spec_level_db[frequency_mask, :], colorscale="Turbo", zmin=reference_leq_db - 80.0, zmax=reference_leq_db + 5.0, colorbar={"title": t("Seviye<br>[dB]", "Level<br>[dB]")}))
+        fig_color.update_layout(title=t("Kalibre Edilmiş Akustik Spektrogram (Logaritmik Ölçek)", "Calibrated Acoustic Spectrogram (Logarithmic Scale)"), xaxis_title=t("Zaman [s]", "Time [s]"), yaxis_title=t("Frekans [Hz]", "Frequency [Hz]"), yaxis_type="log", height=620)
+        st.plotly_chart(fig_color, use_container_width=True)
 
-    report_data["figures"]["Color Map"] = fig_color
+        report_data["figures"]["Color Map"] = fig_color
 
-    st.markdown("### 🤖 Akıllı Teşhis (Auto-Interpretation)")
-    db_matrix = spec_level_db[frequency_mask, :]
-    time_variance = np.var(np.mean(db_matrix, axis=0))
-    freq_variance = np.var(np.mean(db_matrix, axis=1))
+        st.markdown("### 🤖 Akıllı Teşhis (Auto-Interpretation)")
+        db_matrix = spec_level_db[frequency_mask, :]
+        time_variance = np.var(np.mean(db_matrix, axis=0))
+        freq_variance = np.var(np.mean(db_matrix, axis=1))
 
-    if time_variance > freq_variance * 1.5: diag_tr = "Spektrogramda zamana bağlı ani enerji değişimleri (Dikey izler) tespit edildi. Muhtemel Kök Neden: **Anlık vuruntular, metal çarpması veya darbe (Impact) gürültüsü**."
-    elif freq_variance > time_variance * 1.5: diag_tr = "Spektrogramda belirli frekans bantlarında yoğunlaşma (Yatay bantlar) tespit edildi. Muhtemel Kök Neden: **Dönen parçalardan kaynaklı sürekli inilti, sürtünme veya harmonik gürültü**."
-    else: diag_tr = "Spektrogramda hem zamana hem de frekansa yayılan karmaşık bir gürültü profili gözlemleniyor. Karmaşık (Geniş bantlı) titreşimler incelenmelidir."
-    
-    st.info(t(f"💡 **Bulgu:** Sinyalin zaman ve frekans eksenindeki enerji dağılım varyansı analiz edildi.\n\n🔍 **Teşhis:** {diag_tr}", f"🔍 **Diagnosis:** {diag_tr}"))
-    report_data["diagnostics"]["Color Map"] = diag_tr
+        if time_variance > freq_variance * 1.5: diag_tr = "Spektrogramda zamana bağlı ani enerji değişimleri (Dikey izler) tespit edildi. Muhtemel Kök Neden: **Anlık vuruntular, metal çarpması veya darbe (Impact) gürültüsü**."
+        elif freq_variance > time_variance * 1.5: diag_tr = "Spektrogramda belirli frekans bantlarında yoğunlaşma (Yatay bantlar) tespit edildi. Muhtemel Kök Neden: **Dönen parçalardan kaynaklı sürekli inilti, sürtünme veya harmonik gürültü**."
+        else: diag_tr = "Spektrogramda hem zamana hem de frekansa yayılan karmaşık bir gürültü profili gözlemleniyor. Karmaşık (Geniş bantlı) titreşimler incelenmelidir."
+        
+        st.info(t(f"💡 **Bulgu:** Sinyalin zaman ve frekans eksenindeki enerji dağılım varyansı analiz edildi.\n\n🔍 **Teşhis:** {diag_tr}", f"🔍 **Diagnosis:** {diag_tr}"))
+        report_data["diagnostics"]["Color Map"] = diag_tr
+    except Exception as e:
+        st.error(t(f"Color Map hatası: {e}", f"Error: {e}"))
 
 # ============================================================
 # TAB 2 — ORDER PLOTS
 # ============================================================
 with tab_order:
-    selected_orders = st.multiselect(t("Takip edilecek mertebeler", "Orders to follow"), options=[0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0, 6.0, 8.0, 10.0], default=[0.5, 1.0, 2.0, 3.0, 4.0, 5.0])
-    
-    if rpm_mode in ["Sabit RPM", "Fixed RPM"]:
-        rotation_frequency = float(fixed_rpm) / 60.0
-        max_order_possible = min(30.0, nyquist / rotation_frequency)
-        max_order = st.slider(t("Gösterilecek maksimum order", "Maximum order to display"), 1.0, float(max(1.0, max_order_possible)), float(min(10.0, max_order_possible)), 0.5)
-        order_df = order_spectrum_from_psd(psd_frequencies, psd, rotation_frequency, max_order, 0.05, calibration_offset_db)
+    try:
+        selected_orders = st.multiselect(t("Takip edilecek mertebeler", "Orders to follow"), options=[0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0, 6.0, 8.0, 10.0], default=[0.5, 1.0, 2.0, 3.0, 4.0, 5.0])
         
-        fig_order = go.Figure(go.Scatter(x=order_df["order"], y=order_df["level_db_spl"], mode="lines", name=t("Order spektrumu", "Order spectrum"), line=dict(color="#E61A25", width=2.5)))
-        harmonic_x, harmonic_y, harmonic_text = [], [], []
-        for so in selected_orders:
-            if so > max_order: continue
-            hw = max(0.05, 2.0 * (psd_frequencies[1] - psd_frequencies[0]) / rotation_frequency)
-            harmonic_power = integrate_psd_band(psd_frequencies, psd, max(0.0, (so - hw) * rotation_frequency), (so + hw) * rotation_frequency)
-            if np.isfinite(harmonic_power) and harmonic_power > 0:
-                harmonic_x.append(so)
-                harmonic_y.append(float(power_to_db(harmonic_power, calibration_offset_db)))
-                harmonic_text.append(f"{so:g}×")
-
-        if harmonic_x: fig_order.add_trace(go.Scatter(x=harmonic_x, y=harmonic_y, mode="markers+text", text=harmonic_text, textposition="top center", marker={"size": 10, "color": "#212529"}))
-        fig_order.update_layout(title=f"{t('Order Spektrumu', 'Order Spectrum')} — {float(fixed_rpm):.0f} RPM", xaxis_title=t("Mertebe / Order", "Order"), yaxis_title=t("dB SPL", "dB SPL"), height=560)
-        st.plotly_chart(fig_order, use_container_width=True)
-        report_data["figures"]["Order Plot"] = fig_order
-
-        st.markdown("### 🤖 Akıllı Teşhis (Auto-Interpretation)")
-        if harmonic_x and harmonic_y:
-            max_idx = np.argmax(harmonic_y)
-            dominant_order = harmonic_x[max_idx]
-            max_db = harmonic_y[max_idx]
+        if rpm_mode in ["Sabit RPM", "Fixed RPM"]:
+            rotation_frequency = float(fixed_rpm) / 60.0
+            max_order_possible = min(30.0, nyquist / rotation_frequency)
+            max_order = st.slider(t("Gösterilecek maksimum order", "Maximum order to display"), 1.0, float(max(1.0, max_order_possible)), float(min(10.0, max_order_possible)), 0.5)
+            order_df = order_spectrum_from_psd(psd_frequencies, psd, rotation_frequency, max_order, 0.05, calibration_offset_db)
             
-            if abs(dominant_order - 1.0) < 0.1: diag_tr = "Sistemde **1x (1. Mertebe)** seviyesi baskın. Muhtemel Kök Neden: **Ana şaftta Balanssızlık (Unbalance)**."
-            elif abs(dominant_order - 2.0) < 0.1: diag_tr = "Sistemde **2x (2. Mertebe)** seviyesi baskın. Muhtemel Kök Neden: **Kaplin/Şaft Eksen Kaçıklığı veya Gevşeklik (Misalignment / Looseness)**."
-            elif dominant_order % 1 != 0: diag_tr = f"Sistemde **{dominant_order}x (Küsuratlı Mertebe)** seviyesi baskın. Muhtemel Kök Neden: **Rulman arızası (Bearing defect) veya Kayış Kayması (Belt Slip)**."
-            else: diag_tr = f"Sistemde **{dominant_order}x (Yüksek Tam Sayı)** seviyesi baskın. Belirli kanat/diş sayısına sahip spesifik parçalar incelenmelidir."
-
-            st.info(t(f"💡 **Bulgu:** En yüksek tepe noktası {max_db:.1f} dB ile {dominant_order}x mertebesinde tespit edildi.\n\n🔍 **Teşhis:** {diag_tr}", f"🔍 **Diagnosis:** {diag_tr}"))
-            report_data["diagnostics"]["Order Plot"] = diag_tr
-
-    else:
-        if rpm_dataframe is None: st.warning(t("Değişken RPM analizi için CSV yükleyin.", "Upload a CSV for variable RPM."))
-        else:
-            rpm_time, rpm_values = prepare_rpm_series(rpm_dataframe, rpm_column, time_column, duration)
-            track_f, track_t, track_psd = spectrogram(audio_signal, fs=sample_rate, window="hann", nperseg=stft_size, noverlap=int(stft_size * 0.75), scaling="density", mode="psd")
-            rpm_at_stft, order_tracks = calculate_order_tracks(track_f, track_t, track_psd, rpm_time, rpm_values, selected_orders, 0.05, calibration_offset_db)
-            binned_tracks = bin_tracks_by_rpm(rpm_at_stft, order_tracks)
-
-            fig_tracking = go.Figure()
+            fig_order = go.Figure(go.Scatter(x=order_df["order"], y=order_df["level_db_spl"], mode="lines", name=t("Order spektrumu", "Order spectrum"), line=dict(color="#E61A25", width=2.5)))
+            harmonic_x, harmonic_y, harmonic_text = [], [], []
             for so in selected_orders:
-                col = f"order_{so:g}"
-                if col in binned_tracks.columns: fig_tracking.add_trace(go.Scatter(x=binned_tracks["rpm"], y=binned_tracks[col], mode="lines+markers", name=f"{so:g}× Order"))
-            fig_tracking.update_layout(title=t("Order Tracking — RPM'e Göre Mertebe Seviyeleri", "Order Tracking"), xaxis_title="RPM", yaxis_title="dB SPL", height=580)
-            st.plotly_chart(fig_tracking, use_container_width=True)
-            report_data["figures"]["Order Plot"] = fig_tracking
+                if so > max_order: continue
+                hw = max(0.05, 2.0 * (psd_frequencies[1] - psd_frequencies[0]) / rotation_frequency)
+                harmonic_power = integrate_psd_band(psd_frequencies, psd, max(0.0, (so - hw) * rotation_frequency), (so + hw) * rotation_frequency)
+                if np.isfinite(harmonic_power) and harmonic_power > 0:
+                    harmonic_x.append(so)
+                    harmonic_y.append(float(power_to_db(harmonic_power, calibration_offset_db)))
+                    harmonic_text.append(f"{so:g}×")
+
+            if harmonic_x: fig_order.add_trace(go.Scatter(x=harmonic_x, y=harmonic_y, mode="markers+text", text=harmonic_text, textposition="top center", marker={"size": 10, "color": "#212529"}))
+            fig_order.update_layout(title=f"{t('Order Spektrumu', 'Order Spectrum')} — {float(fixed_rpm):.0f} RPM", xaxis_title=t("Mertebe / Order", "Order"), yaxis_title=t("dB SPL", "dB SPL"), height=560)
+            st.plotly_chart(fig_order, use_container_width=True)
+            report_data["figures"]["Order Plot"] = fig_order
+
+            st.markdown("### 🤖 Akıllı Teşhis (Auto-Interpretation)")
+            if harmonic_x and harmonic_y:
+                max_idx = np.argmax(harmonic_y)
+                dominant_order = harmonic_x[max_idx]
+                max_db = harmonic_y[max_idx]
+                
+                if abs(dominant_order - 1.0) < 0.1: diag_tr = "Sistemde **1x (1. Mertebe)** seviyesi baskın. Muhtemel Kök Neden: **Ana şaftta Balanssızlık (Unbalance)**."
+                elif abs(dominant_order - 2.0) < 0.1: diag_tr = "Sistemde **2x (2. Mertebe)** seviyesi baskın. Muhtemel Kök Neden: **Kaplin/Şaft Eksen Kaçıklığı veya Gevşeklik (Misalignment / Looseness)**."
+                elif dominant_order % 1 != 0: diag_tr = f"Sistemde **{dominant_order}x (Küsuratlı Mertebe)** seviyesi baskın. Muhtemel Kök Neden: **Rulman arızası (Bearing defect) veya Kayış Kayması (Belt Slip)**."
+                else: diag_tr = f"Sistemde **{dominant_order}x (Yüksek Tam Sayı)** seviyesi baskın. Belirli kanat/diş sayısına sahip spesifik parçalar incelenmelidir."
+
+                st.info(t(f"💡 **Bulgu:** En yüksek tepe noktası {max_db:.1f} dB ile {dominant_order}x mertebesinde tespit edildi.\n\n🔍 **Teşhis:** {diag_tr}", f"🔍 **Diagnosis:** {diag_tr}"))
+                report_data["diagnostics"]["Order Plot"] = diag_tr
+
+        else:
+            if rpm_dataframe is None: st.warning(t("Değişken RPM analizi için CSV yükleyin.", "Upload a CSV for variable RPM."))
+            else:
+                rpm_time, rpm_values = prepare_rpm_series(rpm_dataframe, rpm_column, time_column, duration)
+                track_f, track_t, track_psd = spectrogram(audio_signal, fs=sample_rate, window="hann", nperseg=stft_size, noverlap=int(stft_size * 0.75), scaling="density", mode="psd")
+                rpm_at_stft, order_tracks = calculate_order_tracks(track_f, track_t, track_psd, rpm_time, rpm_values, selected_orders, 0.05, calibration_offset_db)
+                binned_tracks = bin_tracks_by_rpm(rpm_at_stft, order_tracks)
+
+                fig_tracking = go.Figure()
+                for so in selected_orders:
+                    col = f"order_{so:g}"
+                    if col in binned_tracks.columns: fig_tracking.add_trace(go.Scatter(x=binned_tracks["rpm"], y=binned_tracks[col], mode="lines+markers", name=f"{so:g}× Order"))
+                fig_tracking.update_layout(title=t("Order Tracking — RPM'e Göre Mertebe Seviyeleri", "Order Tracking"), xaxis_title="RPM", yaxis_title="dB SPL", height=580)
+                st.plotly_chart(fig_tracking, use_container_width=True)
+                report_data["figures"]["Order Plot"] = fig_tracking
+    except Exception as e:
+        st.error(t(f"Order Plot hatası: {e}", f"Error: {e}"))
 
 # ============================================================
 # TAB 3 — ARTICULATION INDEX / SII
 # ============================================================
 with tab_ai:
-    speech_efforts_map = {t("Normal", "Normal"): np.array([34.75, 34.27, 25.01, 17.32, 9.33, 1.13])}
-    octave_noise_levels = octave_band_levels(psd_frequencies, psd, calibration_offset_db, SII_OCTAVE_FREQS)
-    sii_table = compute_octave_sii(octave_noise_levels, speech_efforts_map[t("Normal", "Normal")])
-    sii_percent = float(sii_table["contribution"].sum()) * 100.0
+    try:
+        speech_efforts_map = {t("Normal", "Normal"): np.array([34.75, 34.27, 25.01, 17.32, 9.33, 1.13])}
+        octave_noise_levels = octave_band_levels(psd_frequencies, psd, calibration_offset_db, SII_OCTAVE_FREQS)
+        sii_table = compute_octave_sii(octave_noise_levels, speech_efforts_map[t("Normal", "Normal")])
+        sii_percent = float(sii_table["contribution"].sum()) * 100.0
 
-    fig_sii = go.Figure(go.Indicator(
-        mode="gauge+number", value=sii_percent, number={"suffix": " %", "valueformat": ".1f", "font": {"color": "#212529"}},
-        title={"text": "Octave-band SII / %AI", "font": {"color": "#212529"}},
-        gauge={
-            "axis": {"range": [0, 100], "tickcolor": "#212529"},
-            "steps": [{"range": [0, 30], "color": "#F0F0F0"}, {"range": [30, 70], "color": "#C8C8C8"}, {"range": [70, 100], "color": "#848484"}],
-            "bar": {"color": "#E61A25"},
-        }
-    ))
-    fig_sii.update_layout(height=430, paper_bgcolor='rgba(0,0,0,0)', font=dict(family="Arial, sans-serif"))
-    st.plotly_chart(fig_sii, use_container_width=True)
-    report_data["figures"]["SII Gauge"] = fig_sii # İlk grafik
+        fig_sii = go.Figure(go.Indicator(
+            mode="gauge+number", value=sii_percent, number={"suffix": " %", "valueformat": ".1f", "font": {"color": "#212529"}},
+            title={"text": "Octave-band SII / %AI", "font": {"color": "#212529"}},
+            gauge={
+                "axis": {"range": [0, 100], "tickcolor": "#212529"},
+                "steps": [{"range": [0, 30], "color": "#F0F0F0"}, {"range": [30, 70], "color": "#C8C8C8"}, {"range": [70, 100], "color": "#848484"}],
+                "bar": {"color": "#E61A25"},
+            }
+        ))
+        fig_sii.update_layout(height=430, paper_bgcolor='rgba(0,0,0,0)', font=dict(family="Arial, sans-serif"))
+        st.plotly_chart(fig_sii, use_container_width=True)
+        report_data["figures"]["SII Gauge"] = fig_sii 
 
-    fig_contribution = go.Figure(go.Bar(x=[format_frequency(v) for v in sii_table["frequency_hz"]], y=100.0 * sii_table["contribution"], marker_color="#E61A25"))
-    fig_contribution.update_layout(title=t(f"SII Katkısı (Toplam: %{sii_percent:.1f})", f"SII Contribution (Total: {sii_percent:.1f}%)"), height=430)
-    st.plotly_chart(fig_contribution, use_container_width=True)
-    report_data["figures"]["SII Contribution"] = fig_contribution # İkinci grafik
+        fig_contribution = go.Figure(go.Bar(x=[format_frequency(v) for v in sii_table["frequency_hz"]], y=100.0 * sii_table["contribution"], marker_color="#E61A25"))
+        fig_contribution.update_layout(title=t(f"SII Katkısı (Toplam: %{sii_percent:.1f})", f"SII Contribution (Total: {sii_percent:.1f}%)"), height=430)
+        st.plotly_chart(fig_contribution, use_container_width=True)
+        report_data["figures"]["SII Contribution"] = fig_contribution 
 
-    st.markdown("### 🤖 Akıllı Teşhis (Auto-Interpretation)")
-    if sii_percent >= 75: diag_tr = "Makine çalışma gürültüsü, insan iletişimini engellemiyor. İş güvenliği açısından **%100 güvenli ve konforlu bölge**."
-    elif sii_percent >= 45: diag_tr = "Makine gürültüsü konuşmaları kısmen maskeliyor. Etkili iletişim kurmak için personelin **ses yükseltmesi gerekebilir**."
-    else: diag_tr = "Makine gürültüsü insan sesini tamamen yutuyor. Operatörler için **kulaklık/yalıtım kesinlikle zorunludur**."
-    
-    st.info(t(f"💡 **Bulgu:** SII Değeri %{sii_percent:.1f}.\n\n🔍 **Teşhis:** {diag_tr}", f"🔍 **Diagnosis:** {diag_tr}"))
-    report_data["diagnostics"]["SII"] = diag_tr
+        st.markdown("### 🤖 Akıllı Teşhis (Auto-Interpretation)")
+        if sii_percent >= 75: diag_tr = "Makine çalışma gürültüsü, insan iletişimini engellemiyor. İş güvenliği açısından **%100 güvenli ve konforlu bölge**."
+        elif sii_percent >= 45: diag_tr = "Makine gürültüsü konuşmaları kısmen maskeliyor. Etkili iletişim kurmak için personelin **ses yükseltmesi gerekebilir**."
+        else: diag_tr = "Makine gürültüsü insan sesini tamamen yutuyor. Operatörler için **kulaklık/yalıtım kesinlikle zorunludur**."
+        
+        st.info(t(f"💡 **Bulgu:** SII Değeri %{sii_percent:.1f}.\n\n🔍 **Teşhis:** {diag_tr}", f"🔍 **Diagnosis:** {diag_tr}"))
+        report_data["diagnostics"]["SII"] = diag_tr
+    except Exception as e:
+        st.error(t(f"SII hatası: {e}", f"Error: {e}"))
 
 # ============================================================
 # TAB 4 — 1/3 OCTAVE BAND PLOTS
 # ============================================================
 with tab_octave:
-    octave_plot_df = third_octave_df[third_octave_df["exact_hz"] <= max_display_frequency].copy()
-    octave_plot_df["label"] = octave_plot_df["nominal_hz"].map(format_frequency)
+    try:
+        octave_plot_df = third_octave_df[third_octave_df["exact_hz"] <= max_display_frequency].copy()
+        octave_plot_df["label"] = octave_plot_df["nominal_hz"].map(format_frequency)
 
-    fig_octave = go.Figure(go.Bar(x=octave_plot_df["label"], y=octave_plot_df["level_db_spl"], marker_color="#E61A25"))
-    fig_octave.update_layout(title=t("1/3 Oktav Bant Spektrumu", "1/3 Octave Band Spectrum"), height=560)
-    st.plotly_chart(fig_octave, use_container_width=True)
-    report_data["figures"]["1/3 Octave"] = fig_octave
+        fig_octave = go.Figure(go.Bar(x=octave_plot_df["label"], y=octave_plot_df["level_db_spl"], marker_color="#E61A25"))
+        fig_octave.update_layout(title=t("1/3 Oktav Bant Spektrumu", "1/3 Octave Band Spectrum"), height=560)
+        st.plotly_chart(fig_octave, use_container_width=True)
+        report_data["figures"]["1/3 Octave"] = fig_octave
 
-    st.markdown("### 🤖 Akıllı Teşhis (Auto-Interpretation)")
-    low_freq_mask = (octave_plot_df["nominal_hz"] >= 20) & (octave_plot_df["nominal_hz"] <= 250)
-    high_freq_mask = (octave_plot_df["nominal_hz"] >= 2000) & (octave_plot_df["nominal_hz"] <= 10000)
-    
-    low_power = np.sum(10 ** (octave_plot_df.loc[low_freq_mask, "level_db_spl"] / 10))
-    high_power = np.sum(10 ** (octave_plot_df.loc[high_freq_mask, "level_db_spl"] / 10))
-    
-    low_db_total = 10 * np.log10(low_power) if low_power > 0 else 0
-    high_db_total = 10 * np.log10(high_power) if high_power > 0 else 0
+        st.markdown("### 🤖 Akıllı Teşhis (Auto-Interpretation)")
+        low_freq_mask = (octave_plot_df["nominal_hz"] >= 20) & (octave_plot_df["nominal_hz"] <= 250)
+        high_freq_mask = (octave_plot_df["nominal_hz"] >= 2000) & (octave_plot_df["nominal_hz"] <= 10000)
+        
+        low_power = np.sum(10 ** (octave_plot_df.loc[low_freq_mask, "level_db_spl"] / 10))
+        high_power = np.sum(10 ** (octave_plot_df.loc[high_freq_mask, "level_db_spl"] / 10))
+        
+        low_db_total = 10 * np.log10(low_power) if low_power > 0 else 0
+        high_db_total = 10 * np.log10(high_power) if high_power > 0 else 0
 
-    if low_db_total > high_db_total + 5: diag_tr = "Spektrumun sol tarafı baskın. **Yapısal titreşimler, balanssızlık veya kalın uğultu (rumble)** sorunları ön planda."
-    elif high_db_total > low_db_total + 5: diag_tr = "Spektrumun sağ tarafı baskın. **Sürtünme, keçe deformasyonu veya tiz ıslık/whine** sorunları ön planda."
-    else: diag_tr = "Gürültü enerjisi düşük ve yüksek frekanslar arasında dengeli dağılmış (Geniş bantlı gürültü karakteristiği)."
+        if low_db_total > high_db_total + 5: diag_tr = "Spektrumun sol tarafı baskın. **Yapısal titreşimler, balanssızlık veya kalın uğultu (rumble)** sorunları ön planda."
+        elif high_db_total > low_db_total + 5: diag_tr = "Spektrumun sağ tarafı baskın. **Sürtünme, keçe deformasyonu veya tiz ıslık/whine** sorunları ön planda."
+        else: diag_tr = "Gürültü enerjisi düşük ve yüksek frekanslar arasında dengeli dağılmış (Geniş bantlı gürültü karakteristiği)."
 
-    st.info(t(f"📊 **Enerji Dağılımı:** Düşük Frekans Toplamı: {low_db_total:.1f} dB | Yüksek Frekans Toplamı: {high_db_total:.1f} dB\n\n🔍 **Teşhis:** {diag_tr}", f"🔍 **Diagnosis:** {diag_tr}"))
-    report_data["diagnostics"]["1/3 Octave"] = diag_tr
+        st.info(t(f"📊 **Enerji Dağılımı:** Düşük Frekans Toplamı: {low_db_total:.1f} dB | Yüksek Frekans Toplamı: {high_db_total:.1f} dB\n\n🔍 **Teşhis:** {diag_tr}", f"🔍 **Diagnosis:** {diag_tr}"))
+        report_data["diagnostics"]["1/3 Octave"] = diag_tr
+    except Exception as e:
+        st.error(t(f"Octave hatası: {e}", f"Error: {e}"))
 
 # ============================================================
 # PDF RAPORLAMA ARAYÜZÜ VE POP-UP
@@ -752,7 +749,7 @@ if PDF_ENABLED:
                 pdf_bytes = build_pdf_report(report_data, antet_data)
                 st.session_state["pdf_bytes"] = pdf_bytes
                 st.session_state.pdf_ready = True
-                st.rerun() # Pop-up'ı kapat ve ana sayfayı güncelle
+                st.rerun() 
                 
     if st.sidebar.button(t("📄 PDF Raporu Hazırla", "📄 Prepare PDF Report"), use_container_width=True):
         pdf_antet_form()
