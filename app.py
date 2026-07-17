@@ -143,7 +143,7 @@ if PDF_ENABLED:
                 self.set_y(40)
 
         def footer(self):
-            # Alt kısımdan 25mm yukarıya konumlan
+            # Alt kısımdan yukarıya konumlan
             self.set_y(-25)
             self.set_font("Arial", "", 8)
             self.set_line_width(0.5)
@@ -165,7 +165,9 @@ if PDF_ENABLED:
             num_lines = len(combined_text.split('\n'))
             line_height = 4
             text_total_height = num_lines * line_height
-            start_y = box_y + (box_h - text_total_height) / 2
+            
+            # Dikey ortalama hesabı
+            start_y = box_y + (box_h - text_total_height) / 2.0
             
             self.set_xy(box_x, start_y)
             self.multi_cell(160, line_height, combined_text, align='C')
@@ -183,23 +185,28 @@ if PDF_ENABLED:
         # --- İLK SAYFA ANTETİ ---
         pdf.set_line_width(0.5)
         
-        # Dış Çerçeveler ve Kutular (Çizgiler)
-        pdf.rect(10, 10, 190, 30) # Ana Logo Bloğu
-        pdf.rect(10, 40, 190, 12) # Subject Bloğu
-        pdf.rect(10, 52, 190, 8)  # Date/Location Bloğu
-        pdf.rect(10, 60, 190, 16) # Author/Dept Bloğu
-        pdf.rect(10, 76, 190, 10) # Distribution Bloğu
+        # Dış Çerçeve (Logo ve Rapor Numarası Bloğu - H: 26mm)
+        # Önce dış çerçeveyi çiziyoruz ki kırmızı şerit üstüne binip köşeleri bozmasın
+        pdf.rect(10, 10, 190, 28)
         
-        # Dikey Ayırıcı Çizgiler (Seperatörler)
-        pdf.line(42, 52, 42, 86)   # Sol etiketlerin (Date, Author, Dist) ayırıcısı
-        pdf.line(125, 52, 125, 76) # Orta ayırıcı (Location, Dept)
-        pdf.line(152, 52, 152, 76) # Sağ etiketlerin ayırıcısı
-        
-        # Kırmızı üst şerit ve Gri alt şerit (Dolgular)
+        # Kırmızı üst şerit (İnce: 2mm, Çerçevenin iç kenarına milimetrik hizalandı)
         pdf.set_fill_color(200, 0, 0)
         pdf.rect(10.25, 10.25, 189.5, 2, 'F')
+        
+        # Dış Çerçeveler ve Kutular (Çizgiler)
+        pdf.rect(10, 38, 190, 12) # Subject Bloğu
+        pdf.rect(10, 50, 190, 8)  # Date/Location Bloğu
+        pdf.rect(10, 58, 190, 16) # Author/Dept Bloğu
+        pdf.rect(10, 74, 190, 10) # Distribution Bloğu
+        
+        # Dikey Ayırıcı Çizgiler (Seperatörler)
+        pdf.line(42, 50, 42, 84)   # Sol etiketlerin (Date, Author, Dist) ayırıcısı
+        pdf.line(125, 50, 125, 74) # Orta ayırıcı (Location, Dept)
+        pdf.line(152, 50, 152, 74) # Sağ etiketlerin ayırıcısı (Department kelimesi sığsın diye 152'ye çekildi)
+        
+        # Gri alt şerit (Logo bloğunun en altına)
         pdf.set_fill_color(240, 240, 240)
-        pdf.rect(10.25, 36, 189.5, 4, 'F')
+        pdf.rect(10.25, 34, 189.5, 4, 'F')
         
         # Logo
         try:
@@ -220,40 +227,40 @@ if PDF_ENABLED:
         # Antet Metinleri (Hücre İçerikleri)
         pdf.set_font("Arial", '', 10)
         
-        pdf.set_xy(11, 43)
+        pdf.set_xy(11, 41)
         pdf.cell(30, 6, "Subject:")
         pdf.set_font("Arial", 'B', 14)
-        pdf.set_xy(43, 43)
+        pdf.set_xy(43, 41)
         pdf.cell(146, 6, clean_text_for_fpdf(antet_data.get('subject', '')), align='C')
         
         pdf.set_font("Arial", '', 10)
-        pdf.set_xy(11, 53)
+        pdf.set_xy(11, 51)
         pdf.cell(30, 6, "Date:")
-        pdf.set_xy(43, 53)
+        pdf.set_xy(43, 51)
         pdf.cell(81, 6, clean_text_for_fpdf(antet_data.get('date', '')))
         
-        pdf.set_xy(126, 53)
+        pdf.set_xy(126, 51)
         pdf.cell(25, 6, "Location:")
-        pdf.set_xy(153, 53)
+        pdf.set_xy(153, 51)
         pdf.cell(46, 6, clean_text_for_fpdf(antet_data.get('location', '')))
         
-        pdf.set_xy(11, 62)
+        pdf.set_xy(11, 60)
         pdf.cell(30, 6, "Author:")
         pdf.set_font("Arial", '', 9)
-        pdf.set_xy(43, 62)
+        pdf.set_xy(43, 60)
         pdf.multi_cell(81, 4, clean_text_for_fpdf(antet_data.get('author', '')))
         
         pdf.set_font("Arial", '', 10)
-        pdf.set_xy(126, 62)
+        pdf.set_xy(126, 60)
         pdf.cell(25, 6, "Department:")
         pdf.set_font("Arial", '', 9)
-        pdf.set_xy(153, 62)
+        pdf.set_xy(153, 60)
         pdf.multi_cell(46, 4, clean_text_for_fpdf(antet_data.get('department', '')))
         
         pdf.set_font("Arial", '', 10)
-        pdf.set_xy(11, 78)
+        pdf.set_xy(11, 76)
         pdf.cell(30, 6, "Distribution list:")
-        pdf.set_xy(43, 78)
+        pdf.set_xy(43, 76)
         pdf.cell(146, 6, clean_text_for_fpdf(antet_data.get('distribution', '')))
         
         # İçeriğin antetin altına taşmaması için kalem Y pozisyonunu güncelliyoruz
@@ -301,9 +308,30 @@ if PDF_ENABLED:
                 pdf.ln(5)
                 
                 if diag_key in report_data["diagnostics"]:
-                    pdf.set_font("Arial", '', 11)
-                    diag_text = ("Teşhis: " if lang_choice == "Türkçe" else "Diagnosis: ") + report_data["diagnostics"][diag_key]
-                    pdf.multi_cell(0, 6, clean_text_for_fpdf(diag_text))
+                    diag_data = report_data["diagnostics"][diag_key]
+                    
+                    if isinstance(diag_data, list):
+                        # Tablo stili (A/B Kıyaslama)
+                        pdf.ln(2)
+                        pdf.set_font("Arial", 'B', 12)
+                        pdf.set_fill_color(200, 0, 0)
+                        pdf.set_text_color(255, 255, 255)
+                        pdf.cell(0, 8, clean_text_for_fpdf("Teşhis ve Karşılaştırma Analizi" if lang_choice == "Türkçe" else "Diagnosis & Comparison Analysis"), border=1, fill=True, ln=True, align='C')
+                        
+                        pdf.set_text_color(0, 0, 0)
+                        for item_label, item_desc in diag_data:
+                            pdf.set_font("Arial", 'B', 10)
+                            pdf.set_fill_color(240, 240, 240)
+                            pdf.cell(0, 6, clean_text_for_fpdf(item_label), border="L T R", fill=True, ln=True)
+                            
+                            pdf.set_font("Arial", '', 10)
+                            pdf.multi_cell(0, 6, clean_text_for_fpdf(item_desc), border="L B R")
+                    else:
+                        # Tekli mod stili (Düz metin)
+                        pdf.set_font("Arial", '', 11)
+                        diag_text = ("Teşhis: " if lang_choice == "Türkçe" else "Diagnosis: ") + str(diag_data)
+                        pdf.multi_cell(0, 6, clean_text_for_fpdf(diag_text))
+                    
                     pdf.ln(10)
         
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_pdf:
@@ -975,7 +1003,11 @@ elif st.session_state.app_mode == "compare":
         )
         
         st.info(final_diag_text)
-        report_data["diagnostics"]["Color Map B"] = final_diag_text
+        report_data["diagnostics"]["Color Map B"] = [
+            (f"A ({uploaded_files[0].name})", t(diag_A_tr, diag_A_en)),
+            (f"B ({uploaded_files[1].name})", t(diag_B_tr, diag_B_en)),
+            (t("KARŞILAŞTIRMA", "COMPARISON"), t(diag_comp_tr, diag_comp_en))
+        ]
 
     # --- ORDER PLOTS ---
     with tab_order:
@@ -1040,7 +1072,11 @@ elif st.session_state.app_mode == "compare":
             )
             
             st.info(final_diag_text)
-            report_data["diagnostics"]["Order Plot"] = final_diag_text
+            report_data["diagnostics"]["Order Plot"] = [
+                (f"A ({uploaded_files[0].name})", t(diag_A_tr, diag_A_en)),
+                (f"B ({uploaded_files[1].name})", t(diag_B_tr, diag_B_en)),
+                (t("KARŞILAŞTIRMA", "COMPARISON"), t(diag_comp_tr, diag_comp_en))
+            ]
 
     # --- SII COMP ---
     with tab_ai:
@@ -1078,6 +1114,7 @@ elif st.session_state.app_mode == "compare":
         fig_sii_bands.add_trace(go.Bar(x=[format_frequency(v) for v in sii_df_B["frequency_hz"]], y=100.0 * sii_df_B["contribution"], name="File B", marker_color="#E61A25"))
         fig_sii_bands.update_layout(title="SII Katkısı (A vs B)", barmode='group', height=400, xaxis_type='category')
         st.plotly_chart(fig_sii_bands, use_container_width=True)
+        report_data["figures"]["SII Bands"] = fig_sii_bands
 
         st.markdown(t("### 🤖 Akıllı Teşhis", "### 🤖 Auto-Interpretation"))
         
@@ -1110,7 +1147,11 @@ elif st.session_state.app_mode == "compare":
         )
 
         st.info(final_diag_text)
-        report_data["diagnostics"]["SII"] = final_diag_text
+        report_data["diagnostics"]["SII"] = [
+            (f"A ({uploaded_files[0].name}) [SII: %{sii_pct_A:.1f}]", t(diag_A_tr, diag_A_en)),
+            (f"B ({uploaded_files[1].name}) [SII: %{sii_pct_B:.1f}]", t(diag_B_tr, diag_B_en)),
+            (t("KARŞILAŞTIRMA", "COMPARISON"), t(diag_comp_tr, diag_comp_en))
+        ]
 
     # --- OCTAVE COMP ---
     with tab_octave:
@@ -1122,6 +1163,7 @@ elif st.session_state.app_mode == "compare":
         fig_oct_comp.add_trace(go.Bar(x=oct_df_B["nominal_hz"].map(format_frequency), y=oct_df_B["level_db_spl"], name="File B", marker_color="#E61A25"))
         fig_oct_comp.update_layout(title="1/3 Oktav Spektrumu (A vs B)", barmode='group', height=500, xaxis_type='category', xaxis_tickangle=-45)
         st.plotly_chart(fig_oct_comp, use_container_width=True)
+        report_data["figures"]["1/3 Octave"] = fig_oct_comp
 
         st.markdown(t("### 🤖 Akıllı Teşhis", "### 🤖 Auto-Interpretation"))
         low_mask = (oct_df_A["nominal_hz"] >= 20) & (oct_df_A["nominal_hz"] <= 250)
