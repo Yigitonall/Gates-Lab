@@ -1,894 +1,1289 @@
-import streamlit as st
-import numpy as np
-import pandas as pd
-import scipy.signal as signal
-from scipy.io import wavfile
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
+import io
+import math
 import os
-from fpdf import FPDF
 import tempfile
 import time
-import base64
+from typing import Iterable, Optional, Sequence, Tuple
 
-# Sayfa yapılandırması
-st.set_page_config(layout="wide", page_title="Gates R&D NVH Analysis", page_icon="⚙️")
+import numpy as np
+import pandas as pd
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+import streamlit as st
+from scipy.io import wavfile
+from scipy.signal import spectrogram, welch
 
-def get_base64_of_bin_file(bin_file):
-    """Lokal bir dosyayı okuyup base64 formatına çevirir (Arka plan resmi için)"""
-    if os.path.exists(bin_file):
-        with open(bin_file, 'rb') as f:
-            data = f.read()
-        return base64.b64encode(data).decode()
-    return None
+try:
+    from fpdf import FPDF
+    PDF_ENABLED = True
+except ImportError:
+    PDF_ENABLED = False
 
+# ============================================================
+# SAYFA AYARLARI VE GATES KURUMSAL TEMA
+# ============================================================
+st.set_page_config(
+    page_title="Gates R&D NVH Analysis",
+    page_icon="🔊",
+    layout="wide",
+)
+
+# CSS Enjeksiyonu
+st.markdown("""
+<style>
+    .stApp { background-color: #FFFFFF; color: #212529; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; }
+    [data-testid="stSidebar"] { background-color: #F0F0F0; border-right: 1px solid #C8C8C8; }
+    [data-testid="stSidebar"] * { color: #212529; }
+    h1, h2, h3, h4 { color: #141412 !important; font-weight: 700 !important; }
+    .stTabs [data-baseweb="tab-list"] { border-bottom: 2px solid #E0E0E0; }
+    .stTabs [aria-selected="true"] { border-bottom-color: #E61A25 !important; border-bottom-width: 3px !important; }
+    .stTabs [aria-selected="true"] p { color: #E61A25 !important; font-weight: bold; }
+    div[data-testid="stFileUploader"] > section { border-color: #C8C8C8; background-color: #F9F9F9; }
+    div[data-testid="stAlert"] { background-color: #F0F0F0; color: #212529; border-left: 5px solid #E61A25; }
+    
+    /* Ana menüdeki büyük butonların tasarımı için ufak dokunuşlar */
+    .landing-title { text-align: center; color: #E61A25 !important; font-size: 3rem !important; margin-bottom: 2rem; }
+    .landing-subtitle { text-align: center; color: #555555; font-size: 1.2rem; margin-bottom: 3rem; }
+</style>
+""", unsafe_allow_html=True)
+
+# ============================================================
+# DİL SEÇİMİ VE SESSION STATE (AKIŞ KONTROLÜ)
+# ============================================================
 if "app_mode" not in st.session_state:
-    st.session_state.app_mode = "landing"
+    st.session_state.app_mode = None  # None (Menü), "single", "compare"
+if "analyze" not in st.session_state:
+    st.session_state.analyze = False
+if "pdf_ready" not in st.session_state:
+    st.session_state.pdf_ready = False
 
-# =====================================================================
-# 0. ANA MENÜ (LANDING PAGE)
-# =====================================================================
-if st.session_state.app_mode == "landing":
-    # Arka plan resmi kontrolü (Klasörde arka_plan.jpg veya arka_plan.png varsa onu kullanır)
-    bg_base64 = get_base64_of_bin_file("arka_plan.jpg") or get_base64_of_bin_file("arka_plan.png")
-    
-    if bg_base64:
-        bg_css = f"""
-        <style>
-        .stApp {{
-            background-image: url("data:image/jpeg;base64,{bg_base64}");
-            background-size: cover;
-            background-position: center;
-            background-repeat: no-repeat;
-            background-attachment: fixed;
-        }}
-        </style>
-        """
-    else:
-        bg_css = ""
+def reset_analysis():
+    st.session_state.analyze = False
+    st.session_state.pdf_ready = False
 
-    # Sadece Ana Menüye özel CSS (Sidebar'ı gizle, üst barı gizle, ortala, butonları şıklaştır, scroll'u kapat)
-    landing_css = f"""
-    {bg_css}
-    <style>
-    /* Ana menüde scroll (kaydırma) özelliğini tamamen kapat */
-    html, body, [data-testid="stAppViewContainer"], [data-testid="stMain"] {{
-        overflow: hidden !important;
-    }}
-    
-    [data-testid="stSidebar"] {{ display: none !important; }}
-    [data-testid="collapsedControl"] {{ display: none !important; }}
-    header[data-testid="stHeader"] {{ display: none !important; }}
-    
-    .block-container {{
-        padding-top: 52vh !important; /* Yazıları ve butonları beyaz kısma (aşağı) indir */
-        max-width: 1200px !important; /* Başlığın tek satıra sığması için genişliği artırdık */
-    }}
-    
-    div.stButton > button {{
-        height: 70px;
-        border: 1px solid #ccc;
-        background-color: rgba(255, 255, 255, 0.95);
-        color: #333;
-        border-radius: 8px;
-        transition: all 0.3s ease;
-    }}
-    div.stButton > button p {{
-        font-size: 1.1rem;
-        font-weight: 500;
-    }}
-    div.stButton > button:hover {{
-        border-color: #E61A25;
-        color: #E61A25;
-        box-shadow: 0 4px 15px rgba(230, 26, 37, 0.15);
-        background-color: white;
-    }}
-    </style>
-    """
-    st.markdown(landing_css, unsafe_allow_html=True)
+def go_to_main_menu():
+    st.session_state.app_mode = None
+    reset_analysis()
 
-    # Başlık ve Alt Başlık (Tek satır olması için white-space: nowrap ve font-size ayarlandı)
-    st.markdown("<h1 style='text-align: center; color: #252525; font-size: 3.2rem; white-space: nowrap; font-family: sans-serif; margin-top: 0px;'>GATES R&D NVH ANALYSIS SYSTEM</h1>", unsafe_allow_html=True)
-    st.markdown("<h3 style='text-align: center; color: #444; font-size: 1.2rem; margin-bottom: 4rem; font-weight: 400;'>Lütfen yapmak istediğiniz analiz tipini seçin</h3>", unsafe_allow_html=True)
+# Dil Seçimi Sidebar'ın en üstünde (Sadece mod seçiliyse sidebar gösterilir)
+lang = "tr"
+if st.session_state.app_mode is not None:
+    try:
+        st.sidebar.image("gates_logo.png", use_container_width=True)
+    except:
+        pass
+    lang_choice = st.sidebar.radio("🌐 Language / Dil", ["Türkçe", "English"], horizontal=True)
+    lang = "tr" if lang_choice == "Türkçe" else "en"
 
-    # Butonlar
-    col1, col2, col3, col4 = st.columns([1, 4, 4, 1])
-    with col2:
-        if st.button("🔍 TEKLİ SES ANALİZİ (Single Analysis)", use_container_width=True):
-            st.session_state.app_mode = "single"
-            st.rerun()
-    with col3:
-        if st.button("⚖️ A/B KARŞILAŞTIRMA ANALİZİ (Comparative Analysis)", use_container_width=True):
-            st.session_state.app_mode = "compare"
-            st.rerun()
+def t(tr_text: str, en_text: str) -> str:
+    return tr_text if lang == "tr" else en_text
 
-else:
-    # =====================================================================
-    # ORTAK SİDEBAR VE FONKSİYONLAR (ANALİZ MODLARI)
-    # =====================================================================
-    # CSS Reset: Ana menüden kalan arka plan, scroll gizleme ve genişlik ayarlarını sıfırla
-    st.markdown("""
-    <style>
-    html, body, [data-testid="stAppViewContainer"], [data-testid="stMain"] {
-        overflow: auto !important;
-    }
-    .stApp {
-        background-image: none !important;
-    }
-    [data-testid="stSidebar"], 
-    [data-testid="collapsedControl"], 
-    header[data-testid="stHeader"] { 
-        display: unset !important; 
-    }
-    .block-container {
-        padding-top: 3rem !important;
-        max-width: unset !important;
-    }
-    </style>
-    """, unsafe_allow_html=True)
+# ============================================================
+# AKUSTİK STANDARTLAR VE SABİTLER
+# ============================================================
+EPS = np.finfo(float).tiny
+THIRD_OCTAVE_NOMINAL = np.array([20, 25, 31.5, 40, 50, 63, 80, 100, 125, 160, 200, 250, 315, 400, 500, 630, 800, 1000, 1250, 1600, 2000, 2500, 3150, 4000, 5000, 6300, 8000, 10000, 12500, 16000, 20000], dtype=float)
+SII_OCTAVE_FREQS = np.array([250, 500, 1000, 2000, 4000, 8000], dtype=float)
+SII_BANDWIDTH_ADJUSTMENT = np.array([22.48, 25.48, 28.48, 31.48, 34.48, 37.48], dtype=float)
+SII_IMPORTANCE = np.array([0.0617, 0.1671, 0.2373, 0.2648, 0.2142, 0.0549], dtype=float)
+SII_INTERNAL_NOISE = np.array([-3.9, -9.7, -12.5, -17.7, -25.9, -7.1], dtype=float)
+SII_NORMAL_SPEECH = np.array([34.75, 34.27, 25.01, 17.32, 9.33, 1.13], dtype=float)
 
-    with st.sidebar:
-        if os.path.exists("gates_logo.png"):
-            st.image("gates_logo.png", use_container_width=True)
-        st.markdown("---")
-        if st.button("⬅️ Ana Menüye Dön (Main Menu)", use_container_width=True):
-            st.session_state.app_mode = "landing"
-            st.rerun()
-        st.markdown("---")
+# ============================================================
+# PDF RAPORLAMA KÜTÜPHANESİ VE TASARIM
+# ============================================================
+def clean_text_for_fpdf(txt):
+    if not isinstance(txt, str): return str(txt)
+    tr_map = {'ç':'c', 'ğ':'g', 'ı':'i', 'ö':'o', 'ş':'s', 'ü':'u', 'Ç':'C', 'Ğ':'G', 'İ':'I', 'Ö':'O', 'Ş':'S', 'Ü':'U', '⚖️':'', '🟦':'', '🟥':'', '📊':'', '🔍':'', '💡':''}
+    for tr, eng in tr_map.items():
+        txt = txt.replace(tr, eng)
+    txt = txt.replace("**", "")
+    return txt.encode('latin-1', 'ignore').decode('latin-1').strip()
 
-    # Sabit parametreler ve ayarlar
-    max_display_frequency = 20000 
-    sii_bands = [250, 500, 1000, 2000, 4000, 8000]
-    sii_weights = {250: 0.06, 500: 0.14, 1000: 0.17, 2000: 0.21, 4000: 0.28, 8000: 0.14}
-    
-    # Octave bant merkez frekansları (IEC 61260 standardı)
-    nominal_bands = [20, 25, 31.5, 40, 50, 63, 80, 100, 125, 160, 200, 250, 315, 400, 500, 630, 800, 1000, 1250, 1600, 2000, 2500, 3150, 4000, 5000, 6300, 8000, 10000, 12500, 16000, 20000]
-    
-    def get_exact_band_frequency(nominal):
-        if nominal < 1000:
-            return 1000 / (10 ** (3/10)) ** round(10 * np.log10(1000/nominal) / 3)
-        else:
-            return 1000 * (10 ** (3/10)) ** round(10 * np.log10(nominal/1000) / 3)
-    
-    exact_bands = [get_exact_band_frequency(f) for f in nominal_bands]
-
-    def calculate_sii(spectrum_freqs, spectrum_dbs):
-        sii_value = 0.0
-        contributions = {}
-        for band in sii_bands:
-            band_mask = (spectrum_freqs >= band * 0.707) & (spectrum_freqs <= band * 1.414)
-            if np.any(band_mask):
-                band_db = 10 * np.log10(np.sum(10**(spectrum_dbs[band_mask]/10)))
-            else:
-                band_db = 0
-                
-            speech_level = 75 
-            snr = speech_level - band_db
-            snr = max(-15, min(15, snr)) 
-            band_contribution = ((snr + 15) / 30) * sii_weights[band]
-            sii_value += band_contribution
-            contributions[band] = band_contribution * 100
-        return sii_value * 100, contributions
-
-    def generate_sii_diagnosis(sii_value, lang="TR"):
-        if sii_value > 75:
-            return "İletişim mükemmel (Normal konuşma duyulabilir)." if lang == "TR" else "Communication is excellent (Normal speech is audible)."
-        elif sii_value > 45:
-            return "İletişim kısmen maskeleniyor." if lang == "TR" else "Communication is partially masked."
-        else:
-            return "İletişim tamamen yutuluyor (İzolasyon zorunlu)." if lang == "TR" else "Communication is completely masked (Isolation required)."
-
-    def apply_a_weighting(freqs):
-        f_sq = freqs**2
-        c1 = 12194**2
-        c2 = 20.6**2
-        c3 = 107.7**2
-        c4 = 737.9**2
-        R_A = (c1 * f_sq**2) / ((f_sq + c2) * np.sqrt((f_sq + c3) * (f_sq + c4)) * (f_sq + c1))
-        A_weight = 20 * np.log10(R_A) + 2.0
-        A_weight[freqs < 10] = -70.0
-        return A_weight
-
-    class CustomPDF(FPDF):
+if PDF_ENABLED:
+    class GatesReport(FPDF):
+        def __init__(self, data, antet_data):
+            super().__init__()
+            self.report_data = data
+            self.antet_data = antet_data
+            
         def header(self):
-            # Antet (Logo, Departman, Rapor Başlığı)
-            self.set_line_width(0.5)
-            self.rect(10, 10, 190, 25)
-            if os.path.exists("gates_logo.png"):
-                self.image("gates_logo.png", 12, 12, 35)
-            
-            self.set_font("Arial", "B", 16)
-            self.set_xy(50, 15)
-            self.cell(100, 15, "Report", border=0, align="C")
-            
-            self.set_font("Arial", "B", 9)
-            self.set_xy(150, 12)
-            self.cell(48, 5, f"Report-No.: {self.report_no}", border=0, align="R")
-            
-            # Kırmızı Şerit - (X=10.25 tam iç kenar hizası)
-            self.set_fill_color(230, 26, 37)
-            self.rect(10.25, 30, 189.5, 4.5, "F")
-            
-            # Antet Bölücü Çizgileri - Department yazısı için x=152'ye kaydırıldı
-            self.line(50, 10, 50, 30)
-            self.line(152, 10, 152, 30)
-            
-            # Sağ üst detaylar (Department vb.)
-            self.set_font("Arial", "", 8)
-            self.set_xy(153, 20)
-            self.cell(45, 4, "Department: S.Cankul", border=0, align="L")
-            self.set_xy(153, 24)
-            self.cell(45, 4, "Test Lab. Engineer", border=0, align="L")
-
-            # Ana Rapor Bilgileri
-            self.set_xy(10, 40)
-            self.set_font("Arial", "B", 10)
-            self.cell(30, 6, "Customer:", border=1)
-            self.set_font("Arial", "", 10)
-            self.cell(65, 6, getattr(self, 'customer', ''), border=1)
-            
-            self.set_font("Arial", "B", 10)
-            self.cell(30, 6, "Sample No.:", border=1)
-            self.set_font("Arial", "", 10)
-            self.cell(65, 6, getattr(self, 'sample_no', ''), border=1)
-            self.ln()
-            
-            self.set_font("Arial", "B", 10)
-            self.cell(30, 6, "Project:", border=1)
-            self.set_font("Arial", "", 10)
-            self.cell(65, 6, getattr(self, 'project', ''), border=1)
-            
-            self.set_font("Arial", "B", 10)
-            self.cell(30, 6, "Material:", border=1)
-            self.set_font("Arial", "", 10)
-            self.cell(65, 6, getattr(self, 'material', ''), border=1)
-            self.ln()
-            
-            self.set_font("Arial", "B", 10)
-            self.cell(30, 6, "Technician:", border=1)
-            self.set_font("Arial", "", 10)
-            self.cell(65, 6, getattr(self, 'technician', ''), border=1)
-            
-            self.set_font("Arial", "B", 10)
-            self.cell(30, 6, "Date:", border=1)
-            self.set_font("Arial", "", 10)
-            self.cell(65, 6, getattr(self, 'test_date', ''), border=1)
-            self.ln(10)
+            # İlk sayfa hariç diğer sayfaların üst anteti
+            if self.page_no() > 1:
+                self.set_line_width(0.5)
+                # Kırmızı üst şerit (tam köşeye oturtuldu)
+                self.set_fill_color(200, 0, 0)
+                self.rect(10.25, 10.25, 189.5, 2, 'F')
+                
+                # Siyah Dış Çerçeve
+                self.rect(10, 10, 190, 24)
+                
+                # Logo alanı (Siyah-Beyaz Logo)
+                try:
+                    self.image("gatessiyah_logo.png", x=12, y=14, w=0, h=14)
+                except:
+                    self.set_font("Arial", 'B', 20)
+                    self.set_xy(12, 18)
+                    self.cell(40, 10, "GATES")
+                    
+                # Ortada Report Yazısı
+                self.set_font("Arial", 'B', 18)
+                self.set_xy(80, 17)
+                self.cell(50, 10, "Report", align='C')
+                
+                # Sağda Report-No
+                self.set_font("Arial", 'B', 10)
+                self.set_xy(140, 14)
+                self.cell(58, 6, clean_text_for_fpdf(f"Report-No.: {self.antet_data.get('report_no', '')}"), align='R')
+                
+                # Alt gri şerit
+                self.set_fill_color(240, 240, 240)
+                self.rect(10.25, 30, 189.5, 4, 'F')
+                
+                # Çizim imlecini antetin altına alıyoruz ki grafik yazıları taşmasın
+                self.set_y(35)
 
         def footer(self):
+            # Alt kısımdan yukarıya konumlan
             self.set_y(-25)
             self.set_font("Arial", "", 8)
             self.set_line_width(0.5)
-            self.rect(10, 272, 190, 15)
-            self.line(165, 272, 165, 287)
             
-            footer_text = "N:\Engineering\Internal\Working_Folders\18_TEST\03 Test Report Preparation\1) WORD TEST REPORTS\3 CUSTOMER RETURN\E4119\06.07.2026 - 2\E4119 R0010 J-2603055.docx\nThis document was created electronically and is valid without signature."
-            self.set_xy(12, 275)
-            self.multi_cell(150, 4, footer_text, border=0, align="C")
+            box_x = 10
+            box_y = self.get_y()
+            box_w = 190
+            box_h = 16 
             
-            self.set_xy(165, 277)
-            self.cell(35, 5, f"Page: {self.page_no()} of {{nb}}", border=0, align="C")
+            # Dış çerçeve ve iç dikey çizgi
+            self.rect(box_x, box_y, box_w, box_h)
+            self.line(box_x + 160, box_y, box_x + 160, box_y + box_h)
+            
+            # Sol bölüm - Metin (Yol + Geçerlilik)
+            path_text = clean_text_for_fpdf(self.antet_data.get('file_path', ''))
+            valid_text = "This document was created electronically and is valid without signature."
+            combined_text = f"{path_text}\n{valid_text}"
+            
+            num_lines = len(combined_text.split('\n'))
+            line_height = 4
+            text_total_height = num_lines * line_height
+            
+            # Dikey ortalama hesabı
+            start_y = box_y + (box_h - text_total_height) / 2.0
+            
+            self.set_xy(box_x, start_y)
+            self.multi_cell(160, line_height, combined_text, align='C')
+            
+            # Sağ bölüm - Sayfa Numarası
+            self.set_xy(box_x + 160, box_y)
+            self.cell(30, box_h, f"Page: {self.page_no()} of {{nb}}", align='C')
 
     def build_pdf_report(report_data, antet_data):
-        pdf = CustomPDF()
-        pdf.report_no = antet_data['report_no']
-        pdf.customer = antet_data['customer']
-        pdf.project = antet_data['project']
-        pdf.technician = antet_data['technician']
-        pdf.sample_no = antet_data['sample_no']
-        pdf.material = antet_data['material']
-        pdf.test_date = antet_data['test_date']
-        
+        pdf = GatesReport(report_data, antet_data)
         pdf.alias_nb_pages()
+        pdf.set_auto_page_break(auto=True, margin=30)
+        pdf.add_page()
         
-        # Karşılaştırma Modu Mantığı
-        if st.session_state.app_mode == "compare":
-            # Çizilecek figürlerin sırası ve başlıkları (Color Map A ve B ayrıldı, SII Bands hariç tutuldu)
-            figures_to_draw = [
-                ("Color Map (A - Ref)", "Acoustic Spectrogram - Reference File"),
-                ("Color Map (B - Test)", "Acoustic Spectrogram - Test File"),
-                ("Order Plot", "Order / Harmonic Analysis"),
-                ("SII Gauge", "Articulation Index / SII Analysis"),
-                ("1/3 Octave", "1/3 Octave Band Spectrum")
-            ]
+        # --- İLK SAYFA ANTETİ ---
+        pdf.set_line_width(0.5)
+        
+        # Dış Çerçeve ve Kutular (Çizgiler)
+        # Önce dış çerçeveyi çiziyoruz ki kırmızı şerit üstüne binip köşeleri bozmasın
+        pdf.rect(10, 10, 190, 30) # Logo ve Rapor Numarası Bloğu (H: 30mm)
+        pdf.rect(10, 40, 190, 14) # Subject Bloğu
+        pdf.rect(10, 54, 190, 10) # Date/Location Bloğu
+        pdf.rect(10, 64, 190, 16) # Author/Dept Bloğu
+        pdf.rect(10, 80, 190, 10) # Distribution Bloğu
+        
+        # Kırmızı üst şerit (İnce: 2mm, Çerçevenin iç kenarına milimetrik hizalandı)
+        pdf.set_fill_color(200, 0, 0)
+        pdf.rect(10.25, 10.25, 189.5, 2, 'F')
+        
+        # Gri alt şerit (Önce çizilir ki siyah çerçeve üstte kalsın)
+        pdf.set_fill_color(240, 240, 240)
+        pdf.rect(10.25, 36, 189.5, 4, 'F')
+        
+        # Dikey Ayırıcı Çizgiler (Seperatörler)
+        pdf.line(42, 54, 42, 90)   # Sol etiketlerin (Date, Author, Dist) ayırıcısı
+        pdf.line(125, 54, 125, 80) # Orta ayırıcı (Location, Dept)
+        pdf.line(152, 54, 152, 80) # Sağ etiketlerin ayırıcısı (Artık kelime taşımasın diye 152'de)
+        
+        # Logo
+        try:
+            pdf.image("gatessiyah_logo.png", x=12, y=14, w=0, h=16)
+        except:
+            pdf.set_font("Arial", 'B', 20)
+            pdf.set_xy(12, 19)
+            pdf.cell(40, 10, "GATES")
             
-            for fig_key, title in figures_to_draw:
-                if fig_key in report_data["figures"]:
-                    # Color Map A ve B dışındaki grafikler için veya Color Map A için yeni sayfa aç
-                    if fig_key != "Color Map (B - Test)":
-                        pdf.add_page()
-                    elif fig_key == "Color Map (B - Test)":
-                        pdf.add_page() # Color Map B için zorunlu yeni sayfa
-                        
-                    pdf.set_font("Arial", "B", 14)
-                    pdf.cell(0, 10, title, ln=True)
-                    
-                    fig = report_data["figures"][fig_key]
-                    
-                    img_height = 400
-                    height_pdf = 100
-                    # Genişletilmiş / Panoramik Yükseklik Ayarları
-                    if fig_key == "SII Gauge":
-                        img_height = 300 
-                        height_pdf = 75
-                    elif fig_key == "1/3 Octave" or fig_key == "Order Plot":
-                        img_height = 380 
-                        height_pdf = 95
-                        
-                    with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp_img:
-                        time.sleep(0.5)
-                        fig.write_image(tmp_img.name, format="png", engine="kaleido", width=800, height=img_height, scale=4)
-                        pdf.image(tmp_img.name, x=10, w=190, h=height_pdf)
-                        tmp_img_path = tmp_img.name
-                        
-                    # Eğer çizilen grafik SII Gauge ise, hemen altına SII Bands (Çubuk) grafiğini de bas
-                    if fig_key == "SII Gauge" and "SII Bands" in report_data["figures"]:
-                        fig2 = report_data["figures"]["SII Bands"]
-                        with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp_img2:
-                            time.sleep(0.5)
-                            fig2.write_image(tmp_img2.name, format="png", engine="kaleido", width=800, height=260, scale=4)
-                            pdf.image(tmp_img2.name, x=10, w=190, h=65)
-                            tmp_img_path2 = tmp_img2.name
-                    
-                    pdf.ln(5)
-                    
-                    # Teşhis ve Karşılaştırma Tablosu (Sadece B dosyası çizildikten sonra veya diğer grafiklerde)
-                    diag_key = fig_key.replace(" (A - Ref)", "").replace(" (B - Test)", "")
-                    if diag_key in report_data["diagnostics"] and fig_key != "Color Map (A - Ref)":
-                        diag = report_data["diagnostics"][diag_key]
-                        
-                        # Tablo Başlığı (Kırmızı)
-                        pdf.set_fill_color(200, 0, 0)
-                        pdf.set_text_color(255, 255, 255)
-                        pdf.set_font("Arial", "B", 12)
-                        pdf.cell(190, 8, "TESHIS / DIAGNOSIS", border=1, align="C", fill=True, ln=True)
-                        
-                        # A ve B Sütun Başlıkları (Gri)
-                        pdf.set_fill_color(230, 230, 230)
-                        pdf.set_text_color(0, 0, 0)
-                        pdf.set_font("Arial", "B", 10)
-                        pdf.cell(95, 6, "A (Reference)", border=1, align="C", fill=True)
-                        pdf.cell(95, 6, "B (Test)", border=1, align="C", fill=True, ln=True)
-                        
-                        # İçerik Hücreleri (Dinamik Yükseklik)
-                        pdf.set_font("Arial", "", 10)
-                        text_A = diag.get("A", "No diagnosis.")
-                        text_B = diag.get("B", "No diagnosis.")
-                        
-                        # En uzun metne göre satır yüksekliğini belirle
-                        lines_A = pdf.get_string_width(text_A) / 90
-                        lines_B = pdf.get_string_width(text_B) / 90
-                        max_lines = max(int(np.ceil(lines_A)), int(np.ceil(lines_B)), 1)
-                        line_height = 6
-                        total_height = max_lines * line_height
-                        
-                        x_start = pdf.get_x()
-                        y_start = pdf.get_y()
-                        
-                        # Yeni sayfaya taşma kontrolü
-                        if y_start + total_height + 25 > 270: 
-                            pdf.add_page()
-                            x_start = pdf.get_x()
-                            y_start = pdf.get_y()
-                            
-                        pdf.multi_cell(95, line_height, text_A, border=1, align="L")
-                        pdf.set_xy(x_start + 95, y_start)
-                        pdf.multi_cell(95, line_height, text_B, border=1, align="L")
-                        
-                        # Karşılaştırma Başlığı
-                        pdf.set_fill_color(200, 0, 0)
-                        pdf.set_text_color(255, 255, 255)
-                        pdf.set_font("Arial", "B", 12)
-                        pdf.cell(190, 8, "KARSILASTIRMA", border=1, align="C", fill=True, ln=True)
-                        
-                        # Karşılaştırma İçeriği
-                        pdf.set_text_color(0, 0, 0)
-                        pdf.set_font("Arial", "", 10)
-                        text_diff = diag.get("Diff", "No comparison.")
-                        pdf.multi_cell(190, 6, text_diff, border=1, align="L")
+        # Report ve Report-No yazıları
+        pdf.set_font("Arial", 'B', 20)
+        pdf.set_xy(80, 20)
+        pdf.cell(50, 10, "Report", align='C')
+        pdf.set_font("Arial", 'B', 10)
+        pdf.set_xy(140, 16)
+        pdf.cell(58, 6, clean_text_for_fpdf(f"Report-No.: {antet_data.get('report_no', '')}"), align='R')
         
-        else:
-            # Tekli Analiz Modu
-            for fig_key, fig in report_data["figures"].items():
-                if fig_key == "SII Bands": continue # Kopya sayfayı önlemek için atla
+        # Antet Metinleri (Hücre İçerikleri)
+        pdf.set_font("Arial", '', 10)
+        
+        pdf.set_xy(11, 44)
+        pdf.cell(30, 6, "Subject:")
+        pdf.set_font("Arial", 'B', 14)
+        pdf.set_xy(43, 44)
+        pdf.cell(146, 6, clean_text_for_fpdf(antet_data.get('subject', '')), align='C')
+        
+        pdf.set_font("Arial", '', 10)
+        pdf.set_xy(11, 56)
+        pdf.cell(30, 6, "Date:")
+        pdf.set_xy(43, 56)
+        pdf.cell(81, 6, clean_text_for_fpdf(antet_data.get('date', '')))
+        
+        pdf.set_xy(126, 56)
+        pdf.cell(25, 6, "Location:")
+        pdf.set_xy(153, 56)
+        pdf.cell(46, 6, clean_text_for_fpdf(antet_data.get('location', '')))
+        
+        pdf.set_xy(11, 66)
+        pdf.cell(30, 6, "Author:")
+        pdf.set_font("Arial", '', 9)
+        pdf.set_xy(43, 66)
+        pdf.multi_cell(81, 4, clean_text_for_fpdf(antet_data.get('author', '')))
+        
+        pdf.set_font("Arial", '', 10)
+        pdf.set_xy(126, 66)
+        pdf.cell(25, 6, "Department:")
+        pdf.set_font("Arial", '', 9)
+        pdf.set_xy(153, 66)
+        pdf.multi_cell(46, 4, clean_text_for_fpdf(antet_data.get('department', '')))
+        
+        pdf.set_font("Arial", '', 10)
+        pdf.set_xy(11, 82)
+        pdf.cell(30, 6, "Distribution list:")
+        pdf.set_xy(43, 82)
+        pdf.cell(146, 6, clean_text_for_fpdf(antet_data.get('distribution', '')))
+        
+        # İçeriğin antetin altına taşmaması için kalem Y pozisyonunu güncelliyoruz
+        pdf.set_y(100)
+        
+        # --- GRAFİKLER VE TEŞHİSLER ---
+        # Compare ve Single modlarında basılacak grafik isimleri
+        sections = [
+            ("Color Map", "Color Map"), 
+            ("Color Map (A - Referans)", "NONE"), 
+            ("Color Map (B - Test)", "Color Map (B - Test)"),
+            ("Order Plot", "Order Plot"), 
+            ("SII Gauge", "SII Gauge"), 
+            ("1/3 Octave", "1/3 Octave")
+        ]
+
+        for fig_key, diag_key in sections:
+            if fig_key in report_data["figures"]:
+                if fig_key != "Color Map" and fig_key != "Color Map (A - Referans)": 
+                    pdf.add_page()
                 
-                pdf.add_page()
-                pdf.set_font("Arial", "B", 14)
-                pdf.cell(0, 10, f"{fig_key} Analysis", ln=True)
+                pdf.set_font("Arial", 'B', 14)
+                title_text = "Articulation Index / SII Analysis" if fig_key == "SII Gauge" else fig_key
+                pdf.cell(0, 10, clean_text_for_fpdf(title_text), ln=True)
+                
+                fig = report_data["figures"][fig_key]
+                # SII grafiklerini dikeyde biraz daha daraltarak altındaki tabloya aynı sayfada yer açıyoruz (Ferah görünüm)
+                img_height = 300 if fig_key == "SII Gauge" else 400
                 
                 with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp_img:
-                    time.sleep(0.5)
-                    fig.write_image(tmp_img.name, format="png", engine="kaleido", width=800, height=400, scale=4)
+                    time.sleep(0.5) # Kaleido rendering delay safety
+                    fig.write_image(tmp_img.name, format="png", engine="kaleido", width=800, height=img_height, scale=4)
                     pdf.image(tmp_img.name, x=10, w=190)
                     tmp_img_path = tmp_img.name
-                    
+                
+                os.remove(tmp_img_path)
+                
+                # Band grafiğini SII Gauge ile aynı sayfaya koyalım (Kopya sayfa oluşturma hatası giderildi)
                 if fig_key == "SII Gauge" and "SII Bands" in report_data["figures"]:
                     fig2 = report_data["figures"]["SII Bands"]
                     with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp_img2:
                         time.sleep(0.5)
+                        # Sütun grafiğini basık göstermeyecek şekilde optimum 260px'e ayarlıyoruz
                         fig2.write_image(tmp_img2.name, format="png", engine="kaleido", width=800, height=260, scale=4)
                         pdf.image(tmp_img2.name, x=10, w=190)
                         tmp_img_path2 = tmp_img2.name
+                    os.remove(tmp_img_path2)
                 
                 pdf.ln(5)
-                if fig_key in report_data["diagnostics"]:
-                    pdf.set_font("Arial", "B", 12)
-                    pdf.cell(0, 10, "Diagnosis:", ln=True)
-                    pdf.set_font("Arial", "", 10)
-                    pdf.multi_cell(0, 5, report_data["diagnostics"][fig_key].encode('latin-1', 'replace').decode('latin-1'))
                 
-        # Çıktı dosyasını oluştur        
-        temp_pdf = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
-        pdf.output(temp_pdf.name)
-        return temp_pdf.name
-
-    # =====================================================================
-    # 1. TEKLİ ANALİZ MODU (SINGLE ANALYSIS)
-    # =====================================================================
-    if st.session_state.app_mode == "single":
-        with st.sidebar:
-            st.header("1. Tekli Analiz Verileri")
-            uploaded_file = st.file_uploader("1. WAV ses dosyası yükleyin:", type=["wav"])
-            max_db_input = st.number_input("Maksimum Pik Seviyesi (MAX SPL) [dB]:", min_value=0.0, max_value=200.0, value=85.0, step=0.1)
+                if diag_key in report_data["diagnostics"]:
+                    diag_data = report_data["diagnostics"][diag_key]
+                    
+                    if isinstance(diag_data, list) and len(diag_data) == 3:
+                        labelA, descA = diag_data[0]
+                        labelB, descB = diag_data[1]
+                        labelComp, descComp = diag_data[2]
+                        
+                        pdf.ln(5)
+                        
+                        # Sayfa sonuna yaklaşıldıysa tabloyu bölmemek için yeni sayfaya geç (Tolerans yüksek tutuldu)
+                        if pdf.get_y() > 250:
+                            pdf.add_page()
+                            
+                        # Ana Başlık: TEŞHİS
+                        pdf.set_font("Arial", 'B', 12)
+                        pdf.set_fill_color(200, 0, 0)
+                        pdf.set_text_color(255, 255, 255)
+                        diag_title = "TEŞHİS / DIAGNOSIS" if lang == "tr" else "DIAGNOSIS"
+                        pdf.cell(190, 8, clean_text_for_fpdf(diag_title), border=1, fill=True, ln=True, align='C')
+                        
+                        # A ve B Sütun Başlıkları
+                        pdf.set_font("Arial", 'B', 10)
+                        pdf.set_fill_color(240, 240, 240)
+                        pdf.set_text_color(0, 0, 0)
+                        short_labelA = labelA[:45] + "..." if len(labelA) > 48 else labelA
+                        short_labelB = labelB[:45] + "..." if len(labelB) > 48 else labelB
+                        pdf.cell(95, 6, clean_text_for_fpdf(short_labelA), border=1, fill=True, align='C')
+                        pdf.cell(95, 6, clean_text_for_fpdf(short_labelB), border=1, fill=True, ln=True, align='C')
+                        
+                        # İçerikler: A ve B (Yan Yana Izgara Sistemi)
+                        pdf.set_font("Arial", '', 10)
+                        start_y = pdf.get_y()
+                        start_x = 10
+                        padding = 2
+                        
+                        # A Hücresi
+                        pdf.set_xy(start_x + padding, start_y + padding)
+                        pdf.multi_cell(95 - 2*padding, 5, clean_text_for_fpdf(descA), border=0, align='L')
+                        yA = pdf.get_y() + padding
+                        
+                        # B Hücresi
+                        pdf.set_xy(start_x + 95 + padding, start_y + padding)
+                        pdf.multi_cell(95 - 2*padding, 5, clean_text_for_fpdf(descB), border=0, align='L')
+                        yB = pdf.get_y() + padding
+                        
+                        max_y = max(yA, yB)
+                        
+                        # Dış çerçeveleri maksimum yüksekliğe göre çiz (Taşmaları önler)
+                        pdf.rect(start_x, start_y, 95, max_y - start_y)
+                        pdf.rect(start_x + 95, start_y, 95, max_y - start_y)
+                        
+                        # İmleci Alt Satıra (Karşılaştırma Başlığına) İndir
+                        pdf.set_y(max_y)
+                        
+                        # Karşılaştırma Başlığı
+                        pdf.set_font("Arial", 'B', 11)
+                        pdf.set_fill_color(200, 0, 0)
+                        pdf.set_text_color(255, 255, 255)
+                        comp_title = "KARŞILAŞTIRMA" if lang == "tr" else "COMPARISON"
+                        pdf.cell(190, 8, clean_text_for_fpdf(comp_title), border=1, fill=True, ln=True, align='C')
+                        
+                        # Karşılaştırma İçeriği (Birleşik Tek Sütun)
+                        pdf.set_font("Arial", '', 10)
+                        pdf.set_text_color(0, 0, 0)
+                        comp_start_y = pdf.get_y()
+                        
+                        pdf.set_xy(start_x + padding, comp_start_y + padding)
+                        pdf.multi_cell(190 - 2*padding, 5, clean_text_for_fpdf(descComp), border=0, align='L')
+                        comp_max_y = pdf.get_y() + padding
+                        
+                        # Dış çerçeveyi çiz
+                        pdf.rect(start_x, comp_start_y, 190, comp_max_y - comp_start_y)
+                        
+                        # Bir sonraki blok için imleci aşağı al
+                        pdf.set_y(comp_max_y)
+                    elif isinstance(diag_data, list):
+                        pass # Yanlış format geldiğinde atla
+                    else:
+                        # Tekli mod stili (Düz metin)
+                        pdf.set_font("Arial", '', 11)
+                        diag_text = ("Teşhis: " if lang == "tr" else "Diagnosis: ") + str(diag_data)
+                        pdf.multi_cell(0, 6, clean_text_for_fpdf(diag_text))
+                    
+                    pdf.ln(10)
+        
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_pdf:
+            pdf.output(tmp_pdf.name)
+            with open(tmp_pdf.name, "rb") as f:
+                pdf_bytes = f.read()
+            tmp_pdf_path = tmp_pdf.name
             
-            rpm_type = st.radio("RPM Tipi:", ["Sabit RPM", "Değişken RPM (CSV)"])
-            rpm_fixed = 1500
-            rpm_df = None
-            if rpm_type == "Sabit RPM":
-                rpm_fixed = st.number_input("Sabit Motor Devri (RPM):", min_value=1, max_value=20000, value=1500)
+        os.remove(tmp_pdf_path)
+        return pdf_bytes
+
+# ============================================================
+# MÜHENDİSLİK FONKSİYONLARI
+# ============================================================
+def safe_integrate(y, x):
+    if hasattr(np, 'trapezoid'): return float(np.trapezoid(y, x))
+    else: return float(np.trapz(y, x))
+
+def read_wav_mono(uploaded_file) -> Tuple[int, np.ndarray]:
+    uploaded_file.seek(0)
+    sample_rate, raw = wavfile.read(uploaded_file)
+    if raw.ndim == 2: raw = raw.astype(np.float64).mean(axis=1)
+    if np.issubdtype(raw.dtype, np.integer):
+        if raw.dtype == np.uint8: signal = (raw.astype(np.float64) - 128.0) / 128.0
+        else:
+            info = np.iinfo(raw.dtype)
+            scale = float(max(abs(info.min), abs(info.max)))
+            signal = raw.astype(np.float64) / scale
+    else: signal = raw.astype(np.float64)
+    signal = np.nan_to_num(signal, nan=0.0, posinf=0.0, neginf=0.0)
+    signal -= np.mean(signal)
+    if signal.size < 256: raise ValueError(t("Ses dosyası çok kısa.", "Audio file is too short."))
+    if not np.any(np.abs(signal) > 0): raise ValueError(t("Geçerli sinyal bulunamadı.", "No valid signal found."))
+    return int(sample_rate), signal
+
+def largest_power_of_two_at_most(value: int) -> int:
+    if value < 2: return 1
+    return 1 << int(math.floor(math.log2(value)))
+
+def choose_segment_size(signal_length: int, requested: int) -> int:
+    return max(256, min(int(requested), largest_power_of_two_at_most(signal_length)))
+
+def power_to_db(power: np.ndarray | float, calibration_offset_db: float) -> np.ndarray:
+    return 10.0 * np.log10(np.maximum(power, EPS)) + calibration_offset_db
+
+def integrate_psd_band(frequencies: np.ndarray, psd: np.ndarray, lower_hz: float, upper_hz: float) -> float:
+    lower_hz = max(float(lower_hz), float(frequencies[0]))
+    upper_hz = min(float(upper_hz), float(frequencies[-1]))
+    if upper_hz <= lower_hz: return np.nan
+    inside = (frequencies > lower_hz) & (frequencies < upper_hz)
+    band_f = np.concatenate(([lower_hz], frequencies[inside], [upper_hz]))
+    band_p = np.concatenate(([np.interp(lower_hz, frequencies, psd)], psd[inside], [np.interp(upper_hz, frequencies, psd)]))
+    if band_f.size < 2: return np.nan
+    return safe_integrate(band_p, band_f)
+
+def calculate_calibration_offset(frequencies: np.ndarray, psd: np.ndarray, reference_leq_db: float, max_frequency_hz: float) -> Tuple[float, float]:
+    upper = min(float(max_frequency_hz), float(frequencies[-1]))
+    recording_power = integrate_psd_band(frequencies, psd, 20.0, upper)
+    if not np.isfinite(recording_power) or recording_power <= 0: raise ValueError(t("Yeterli spektral enerji bulunamadı.", "Sufficient spectral energy not found."))
+    raw_level_db = 10.0 * np.log10(recording_power)
+    offset_db = float(reference_leq_db) - raw_level_db
+    return offset_db, raw_level_db
+
+def exact_third_octave_centers() -> np.ndarray:
+    k = np.arange(-17, 14, dtype=float)
+    return 1000.0 * np.power(10.0, k / 10.0)
+
+def third_octave_levels(frequencies: np.ndarray, psd: np.ndarray, calibration_offset_db: float, nyquist_hz: float) -> pd.DataFrame:
+    exact_centers = exact_third_octave_centers()
+    g = 10.0 ** (3.0 / 10.0)
+    edge_factor = g ** (1.0 / 6.0)
+    rows = []
+    for nominal, exact in zip(THIRD_OCTAVE_NOMINAL, exact_centers):
+        lower = exact / edge_factor
+        upper = exact * edge_factor
+        if lower < frequencies[0] or upper > nyquist_hz: continue
+        band_power = integrate_psd_band(frequencies, psd, lower, upper)
+        level = float(power_to_db(band_power, calibration_offset_db)) if np.isfinite(band_power) and band_power > 0 else np.nan
+        rows.append({"nominal_hz": nominal, "exact_hz": exact, "lower_hz": lower, "upper_hz": upper, "level_db_spl": level})
+    return pd.DataFrame(rows)
+
+def format_frequency(value: float) -> str:
+    if value >= 1000:
+        k = value / 1000.0
+        if abs(k - round(k)) < 1e-9: return f"{int(round(k))}k"
+        return f"{k:g}k"
+    return f"{value:g}"
+
+def octave_band_levels(frequencies: np.ndarray, psd: np.ndarray, calibration_offset_db: float, centers_hz: Sequence[float]) -> np.ndarray:
+    levels = []
+    edge = math.sqrt(2.0)
+    for center in centers_hz:
+        lower = center / edge
+        upper = center * edge
+        if lower < frequencies[0] or upper > frequencies[-1]:
+            levels.append(np.nan)
+            continue
+        power = integrate_psd_band(frequencies, psd, lower, upper)
+        if np.isfinite(power) and power > 0: levels.append(float(power_to_db(power, calibration_offset_db)))
+        else: levels.append(np.nan)
+    return np.asarray(levels, dtype=float)
+
+def compute_octave_sii(octave_noise_band_levels_db: np.ndarray, speech_spectrum: np.ndarray) -> pd.DataFrame:
+    noise_spectrum = octave_noise_band_levels_db - SII_BANDWIDTH_ADJUSTMENT
+    disturbance = np.maximum(noise_spectrum, SII_INTERNAL_NOISE)
+    level_distortion = np.clip(1.0 - (speech_spectrum - SII_NORMAL_SPEECH - 10.0) / 160.0, 0.0, 1.0)
+    audibility_k = np.clip((speech_spectrum - disturbance + 15.0) / 30.0, 0.0, 1.0)
+    band_audibility = level_distortion * audibility_k
+    contribution = SII_IMPORTANCE * band_audibility
+    return pd.DataFrame({
+        "frequency_hz": SII_OCTAVE_FREQS, "noise_band_db_spl": octave_noise_band_levels_db,
+        "audibility": band_audibility, "contribution": contribution, "importance": SII_IMPORTANCE
+    })
+
+def order_spectrum_from_psd(frequencies: np.ndarray, psd: np.ndarray, rotation_frequency_hz: float, max_order: float, order_step: float, calibration_offset_db: float) -> pd.DataFrame:
+    edges = np.arange(0.0, max_order + order_step, order_step)
+    centers = (edges[:-1] + edges[1:]) / 2.0
+    levels = []
+    for lower_order, upper_order in zip(edges[:-1], edges[1:]):
+        lower_hz = lower_order * rotation_frequency_hz
+        upper_hz = upper_order * rotation_frequency_hz
+        band_power = integrate_psd_band(frequencies, psd, lower_hz, upper_hz)
+        if np.isfinite(band_power) and band_power > 0: levels.append(float(power_to_db(band_power, calibration_offset_db)))
+        else: levels.append(np.nan)
+    return pd.DataFrame({"order": centers, "level_db_spl": levels})
+
+def parse_numeric_series(series: pd.Series) -> pd.Series:
+    if pd.api.types.is_numeric_dtype(series): return pd.to_numeric(series, errors="coerce")
+    cleaned = series.astype(str).str.strip().str.replace(" ", "", regex=False).str.replace(",", ".", regex=False)
+    return pd.to_numeric(cleaned, errors="coerce")
+
+def prepare_rpm_series(rpm_dataframe: pd.DataFrame, rpm_column: str, time_column: Optional[str], duration_seconds: float) -> Tuple[np.ndarray, np.ndarray]:
+    rpm = parse_numeric_series(rpm_dataframe[rpm_column])
+    if time_column is None: time_values = pd.Series(np.linspace(0.0, duration_seconds, len(rpm_dataframe)))
+    else:
+        time_values = parse_numeric_series(rpm_dataframe[time_column])
+        if "ms" in time_column.lower() or "millisecond" in time_column.lower(): time_values = time_values / 1000.0
+    valid = rpm.notna() & time_values.notna() & (rpm > 0)
+    rpm_values = rpm[valid].to_numpy(dtype=float)
+    time_values_np = time_values[valid].to_numpy(dtype=float)
+    if rpm_values.size < 2: raise ValueError(t("RPM CSV dosyasında en az 2 veri olmalıdır.", "RPM CSV must contain at least 2 valid data points."))
+    order = np.argsort(time_values_np)
+    grouped = pd.DataFrame({"time": time_values_np[order], "rpm": rpm_values[order]}).groupby("time", as_index=False)["rpm"].mean()
+    return grouped["time"].to_numpy(dtype=float), grouped["rpm"].to_numpy(dtype=float)
+
+def calculate_order_tracks(stft_frequencies: np.ndarray, stft_times: np.ndarray, stft_psd: np.ndarray, rpm_time: np.ndarray, rpm_values: np.ndarray, orders: Sequence[float], half_width_order: float, calibration_offset_db: float) -> Tuple[np.ndarray, dict[float, np.ndarray]]:
+    rpm_at_stft = np.interp(stft_times, rpm_time, rpm_values, left=np.nan, right=np.nan)
+    tracks: dict[float, np.ndarray] = {}
+    for selected_order in orders:
+        levels = np.full(stft_times.shape, np.nan, dtype=float)
+        for index, rpm_now in enumerate(rpm_at_stft):
+            if not np.isfinite(rpm_now) or rpm_now <= 0: continue
+            rotation_hz = rpm_now / 60.0
+            lower_hz = max(0.0, (selected_order - half_width_order) * rotation_hz)
+            upper_hz = (selected_order + half_width_order) * rotation_hz
+            band_power = integrate_psd_band(stft_frequencies, stft_psd[:, index], lower_hz, upper_hz)
+            if np.isfinite(band_power) and band_power > 0: levels[index] = float(power_to_db(band_power, calibration_offset_db))
+        tracks[float(selected_order)] = levels
+    return rpm_at_stft, tracks
+
+def bin_tracks_by_rpm(rpm_values: np.ndarray, tracks: dict[float, np.ndarray], requested_bins: int = 50) -> pd.DataFrame:
+    valid_rpm = rpm_values[np.isfinite(rpm_values)]
+    if valid_rpm.size < 2: return pd.DataFrame()
+    rpm_min, rpm_max = float(np.nanmin(valid_rpm)), float(np.nanmax(valid_rpm))
+    if rpm_max <= rpm_min: return pd.DataFrame()
+    bin_count = max(8, min(int(requested_bins), valid_rpm.size))
+    edges = np.linspace(rpm_min, rpm_max, bin_count + 1)
+    centers = (edges[:-1] + edges[1:]) / 2.0
+    indices = np.digitize(rpm_values, edges) - 1
+    output = {"rpm": centers}
+    for selected_order, levels in tracks.items():
+        binned = np.full(bin_count, np.nan, dtype=float)
+        for bin_index in range(bin_count):
+            mask = (indices == bin_index) & np.isfinite(rpm_values) & np.isfinite(levels)
+            if np.any(mask): binned[bin_index] = float(np.nanmedian(levels[mask]))
+        output[f"order_{selected_order:g}"] = binned
+    result = pd.DataFrame(output)
+    value_columns = [col for col in result.columns if col != "rpm"]
+    return result.dropna(subset=value_columns, how="all")
+
+# ============================================================
+# 1. KARŞILAMA EKRANI (LANDING PAGE)
+# ============================================================
+if st.session_state.app_mode is None:
+    st.markdown('<div class="landing-title">GATES R&D NVH ANALYSIS SYSTEM</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="landing-subtitle">{t("Lütfen yapmak istediğiniz analiz tipini seçin", "Please select the type of analysis you want to perform")}</div>', unsafe_allow_html=True)
+    
+    col1, col2, col3, col4 = st.columns([1, 3, 3, 1])
+    
+    with col2:
+        if st.button(t("🔍 TEKLİ SES ANALİZİ\n(Single Analysis)", "🔍 SINGLE NOISE ANALYSIS\n(Standard)"), use_container_width=True):
+            st.session_state.app_mode = "single"
+            st.rerun()
+            
+    with col3:
+        if st.button(t("⚖️ A/B KARŞILAŞTIRMA ANALİZİ\n(Comparative Analysis)", "⚖️ A/B COMPARATIVE ANALYSIS\n(Reference vs Test)"), use_container_width=True):
+            st.session_state.app_mode = "compare"
+            st.rerun()
+            
+    st.stop()
+
+# ============================================================
+# ORTAK YAN MENÜ (SIDEBAR) BİLEŞENLERİ
+# ============================================================
+st.sidebar.button(t("⬅️ Ana Menüye Dön", "⬅️ Back to Main Menu"), on_click=go_to_main_menu, use_container_width=True)
+st.sidebar.markdown("---")
+
+st.title(t("🔊 Gürültü ve Akustik Analiz Sistemi (NVH)", "🔊 Noise and Acoustic Analysis System (NVH)"))
+st.caption("COLOR MAPS • ORDER PLOTS • ARTICULATION INDEX / SII • 1/3 OCTAVE BAND PLOTS")
+
+# PDF DİALOG MODÜLÜ
+@st.dialog(t("📄 PDF Rapor Bilgilerini Girin", "📄 Enter PDF Report Information"))
+def pdf_info_dialog(report_data):
+    st.write(t("Lütfen raporun ilk sayfasındaki antette görünecek bilgileri doldurun.", 
+               "Please fill in the information that will appear in the header on the first page of the report."))
+    col1, col2 = st.columns(2)
+    with col1:
+        subject = st.text_input("Subject:", value="Customer return inspection")
+        date_val = st.text_input("Date:", value="10.07.2026")
+        author = st.text_area("Author:", value="E.Ozcuhadar,\nTest Analysis Responsible\nEngineering ESPT – EMEA", height=100)
+    with col2:
+        report_no = st.text_input("Report-No.:", value="E4119 R0010 J-2603055")
+        location = st.text_input("Location:", value="Technical Center Izmir")
+        department = st.text_area("Department:", value="S.Cankul\nTest Lab. Supervisor\nEngineering ESPT – EMEA", height=100)
+        
+    distribution = st.text_input("Distribution list:", value="Torsten Paluszek")
+    file_path = st.text_input(t("Dosya Yolu (Alt Footer):", "File Path (Bottom Footer):"), value=r"N:\Engineering\Internal\Working_Folders\18_TEST\03 Test Report Preparation\1) WORD TEST REPORTS\3 CUSTOMER RETURN\E4119\06.07.2026 - 2\E4119 R0010 J-2603055.docx")
+    
+    if st.button(t("✅ Raporu Oluştur", "✅ Generate Report"), use_container_width=True):
+        antet_data = {
+            "subject": subject, "date": date_val, "author": author, "report_no": report_no,
+            "location": location, "department": department, "distribution": distribution, "file_path": file_path
+        }
+        with st.spinner(t("PDF oluşturuluyor, grafikler işleniyor (Lütfen bekleyin)...", "Generating PDF, processing charts (Please wait)...")):
+            try:
+                pdf_bytes = build_pdf_report(report_data, antet_data)
+                st.session_state["pdf_bytes"] = pdf_bytes
+                st.session_state.pdf_ready = True
+                st.rerun()
+            except Exception as e:
+                st.error(t(f"PDF Oluşturma Hatası: {e}\nLütfen 'pip install fpdf2 kaleido' kurulu olduğundan emin olun.", f"PDF Error: {e}"))
+
+# ============================================================
+# 2. TEKLİ ANALİZ MODU (SINGLE ANALYSIS)
+# ============================================================
+if st.session_state.app_mode == "single":
+    st.sidebar.header(t("📁 Veri Girişi ve Ayarlar", "📁 Data Entry & Settings"))
+
+    uploaded_audio = st.sidebar.file_uploader(t("1. WAV ses dosyası", "1. WAV audio file"), type=["wav"], on_change=reset_analysis)
+
+    st.sidebar.subheader(t("🎚️ SPL Kalibrasyonu (MAX HOLD)", "🎚️ SPL Calibration (MAX HOLD)"))
+    reference_leq_db = st.sidebar.number_input(
+        t("Maksimum Pik Seviyesi (MAX SPL) [dB]", "Maximum Peak Level (MAX SPL) [dB]"),
+        min_value=20.0, max_value=140.0, value=80.0, step=0.1, on_change=reset_analysis
+    )
+
+    st.sidebar.subheader(t("🏎️ RPM Bilgisi", "🏎️ RPM Information"))
+    rpm_mode = st.sidebar.radio(t("RPM tipi", "RPM Type"), [t("Sabit RPM", "Fixed RPM"), t("Değişken RPM (CSV)", "Variable RPM (CSV)")], on_change=reset_analysis)
+
+    fixed_rpm, rpm_dataframe, rpm_column, time_column = None, None, None, None
+
+    if rpm_mode in ["Sabit RPM", "Fixed RPM"]:
+        fixed_rpm = st.sidebar.number_input(t("Sabit dönüş hızı [RPM]", "Fixed rotation speed [RPM]"), min_value=1.0, value=1500.0, step=10.0, on_change=reset_analysis)
+    else:
+        uploaded_rpm = st.sidebar.file_uploader(t("RPM zaman serisi (.csv)", "RPM time series (.csv)"), type=["csv"], on_change=reset_analysis)
+        if uploaded_rpm is not None:
+            try:
+                uploaded_rpm.seek(0)
+                rpm_dataframe = pd.read_csv(uploaded_rpm, sep=None, engine="python")
+                columns = list(rpm_dataframe.columns)
+                if not columns: raise ValueError(t("CSV dosyasında sütun bulunamadı.", "No columns found in CSV."))
+                rpm_guess = next((c for c in columns if any(k in c.lower() for k in ["rpm", "devir", "speed"])), columns[-1])
+                rpm_column = st.sidebar.selectbox(t("RPM sütunu", "RPM column"), columns, index=columns.index(rpm_guess), on_change=reset_analysis)
+                
+                time_dist_opt = t("<Kayıt süresine eşit dağıt>", "<Distribute evenly over recording time>")
+                time_options = [time_dist_opt] + columns
+                time_guess = next((c for c in columns if any(k in c.lower() for k in ["time", "zaman", "sec"])), None)
+                default_time_index = time_options.index(time_guess) if time_guess in time_options else 0
+                selected_time = st.sidebar.selectbox(t("Zaman sütunu", "Time column"), time_options, index=default_time_index, on_change=reset_analysis)
+                time_column = None if selected_time == time_dist_opt else selected_time
+            except Exception as exc:
+                st.sidebar.error(t(f"RPM CSV okunamadı: {exc}", f"Failed to read RPM CSV: {exc}"))
+
+    st.sidebar.markdown("---")
+
+    if st.sidebar.button(t("🚀 Analiz Yap", "🚀 Run Analysis"), type="primary", use_container_width=True):
+        if uploaded_audio is not None:
+            st.session_state.analyze = True
+            st.session_state.pdf_ready = False
+        else:
+            st.sidebar.error(t("Lütfen önce bir WAV dosyası yükleyin!", "Please upload a WAV file first!"))
+
+    if uploaded_audio is None:
+        st.info(t("ℹ️ Lütfen sol panelden bir **.wav** ses dosyası yükleyin, parametreleri girin ve 'Analiz Yap' butonuna tıklayın.", 
+                  "ℹ️ Please upload a **.wav** audio file from the left panel, set parameters, and click 'Run Analysis'."))
+        st.stop()
+
+    if not st.session_state.analyze:
+        st.info(t("👈 Ayarlarınızı tamamladıktan sonra sol menünün en altındaki **'Analiz Yap'** butonuna tıklayın.", 
+                  "👈 After setting your parameters, click the **'Run Analysis'** button at the bottom of the left menu."))
+        st.stop()
+
+    with st.spinner(t("Akustik veriler işleniyor... Lütfen bekleyiniz.", "Processing acoustic data... Please wait.")):
+        sample_rate, audio_signal = read_wav_mono(uploaded_audio)
+        duration = audio_signal.size / sample_rate
+        nyquist = sample_rate / 2.0
+        default_welch, default_stft = 16384, 4096
+        max_display_frequency = min(20000.0, nyquist)
+        welch_size = choose_segment_size(audio_signal.size, int(default_welch))
+        welch_overlap = welch_size // 2
+
+        psd_frequencies, psd = welch(audio_signal, fs=sample_rate, window="hann", nperseg=welch_size, noverlap=welch_overlap, detrend="constant", scaling="density", return_onesided=True)
+        calibration_offset_db, raw_recording_level_db = calculate_calibration_offset(psd_frequencies, psd, reference_leq_db, max_display_frequency)
+        third_octave_df = third_octave_levels(psd_frequencies, psd, calibration_offset_db, nyquist)
+
+    st.success(t(f"✅ Analiz Tamamlandı! — Süre: **{duration:.2f} s** | Örnekleme: **{sample_rate:,} Hz**", 
+                 f"✅ Analysis Complete! — Duration: **{duration:.2f} s** | Sampling: **{sample_rate:,} Hz**"))
+
+    report_data = {"file_name": uploaded_audio.name, "max_spl": reference_leq_db, "rpm_info": f"{fixed_rpm} RPM" if rpm_mode in ["Sabit RPM", "Fixed RPM"] else t("Değişken CSV", "Variable CSV"), "figures": {}, "diagnostics": {}}
+
+    tab_color, tab_order, tab_ai, tab_octave = st.tabs(["🌈 COLOR MAPS", "🏎️ ORDER PLOTS", "🧠 ARTICULATION INDEX / SII", "🎼 1/3 OCTAVE BAND PLOTS"])
+
+    with tab_color:
+        stft_size = choose_segment_size(audio_signal.size, int(default_stft))
+        stft_overlap = int(stft_size * 0.75)
+        spec_f, spec_t, spec_psd = spectrogram(audio_signal, fs=sample_rate, window="hann", nperseg=stft_size, noverlap=stft_overlap, detrend="constant", scaling="density", mode="psd")
+        spec_df = spec_f[1] - spec_f[0] if spec_f.size > 1 else 1.0
+        spec_level_db = power_to_db(spec_psd * spec_df, calibration_offset_db)
+        frequency_mask = (spec_f >= 20.0) & (spec_f <= max_display_frequency)
+
+        fig_color = go.Figure(go.Heatmap(x=spec_t, y=spec_f[frequency_mask], z=spec_level_db[frequency_mask, :], colorscale="Turbo", zmin=reference_leq_db - 80.0, zmax=reference_leq_db + 5.0, colorbar={"title": t("Seviye<br>[dB]", "Level<br>[dB]")}))
+        fig_color.update_layout(title=t("Kalibre Edilmiş Akustik Spektrogram (Logaritmik Ölçek)", "Calibrated Acoustic Spectrogram (Logarithmic Scale)"), xaxis_title=t("Zaman [s]", "Time [s]"), yaxis_title=t("Frekans [Hz]", "Frequency [Hz]"), yaxis_type="log", height=620)
+        st.plotly_chart(fig_color, use_container_width=True)
+        report_data["figures"]["Color Map"] = fig_color
+
+        st.markdown(t("### 🤖 Akıllı Teşhis", "### 🤖 Auto-Interpretation"))
+        db_matrix = spec_level_db[frequency_mask, :]
+        time_variance = np.var(np.mean(db_matrix, axis=0))
+        freq_variance = np.var(np.mean(db_matrix, axis=1))
+
+        if time_variance > freq_variance * 1.5: 
+            diag_tr = "Spektrogramda zamana bağlı ani enerji değişimleri (Dikey izler) tespit edildi. Muhtemel Kök Neden: Anlık vuruntular, metal çarpması veya darbe (Impact) gürültüsü."
+            diag_en = "Sudden time-dependent energy changes (Vertical traces) detected in the spectrogram. Probable Root Cause: Instantaneous knocks, metal clashing, or impact noise."
+        elif freq_variance > time_variance * 1.5: 
+            diag_tr = "Spektrogramda belirli frekans bantlarında yoğunlaşma (Yatay bantlar) tespit edildi. Muhtemel Kök Neden: Dönen parçalardan kaynaklı sürekli inilti, sürtünme veya harmonik gürültü."
+            diag_en = "Concentration in specific frequency bands (Horizontal bands) detected in the spectrogram. Probable Root Cause: Continuous whine, friction, or harmonic noise caused by rotating parts."
+        else: 
+            diag_tr = "Spektrogramda hem zamana hem de frekansa yayılan karmaşık bir gürültü profili gözlemleniyor. Karmaşık (Geniş bantlı) titreşimler incelenmelidir."
+            diag_en = "A complex noise profile spreading across both time and frequency is observed. Complex (Broadband) vibrations should be investigated."
+        
+        diag_final = t(diag_tr, diag_en)
+        st.info(t(f"💡 **Bulgu:** Sinyalin zaman ve frekans eksenindeki enerji dağılım varyansı analiz edildi.\n\n🔍 **Teşhis:** {diag_final}", f"💡 **Finding:** The energy distribution variance of the signal in time and frequency axes was analyzed.\n\n🔍 **Diagnosis:** {diag_final}"))
+        report_data["diagnostics"]["Color Map"] = diag_final
+
+    with tab_order:
+        selected_orders = st.multiselect(t("Takip edilecek mertebeler", "Orders to follow"), options=[0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0, 6.0, 8.0, 10.0], default=[0.5, 1.0, 2.0, 3.0, 4.0, 5.0])
+        
+        if rpm_mode in ["Sabit RPM", "Fixed RPM"]:
+            rotation_frequency = float(fixed_rpm) / 60.0
+            max_order_possible = min(30.0, nyquist / rotation_frequency)
+            max_order = st.slider(t("Gösterilecek maksimum order", "Maximum order to display"), 1.0, float(max(1.0, max_order_possible)), float(min(10.0, max_order_possible)), 0.5)
+            order_df = order_spectrum_from_psd(psd_frequencies, psd, rotation_frequency, max_order, 0.05, calibration_offset_db)
+            
+            fig_order = go.Figure(go.Scatter(x=order_df["order"], y=order_df["level_db_spl"], mode="lines", name=t("Order spektrumu", "Order spectrum"), line=dict(color="#E61A25", width=2.5)))
+            harmonic_x, harmonic_y, harmonic_text = [], [], []
+            for so in selected_orders:
+                if so > max_order: continue
+                hw = max(0.05, 2.0 * (psd_frequencies[1] - psd_frequencies[0]) / rotation_frequency)
+                harmonic_power = integrate_psd_band(psd_frequencies, psd, max(0.0, (so - hw) * rotation_frequency), (so + hw) * rotation_frequency)
+                if np.isfinite(harmonic_power) and harmonic_power > 0:
+                    harmonic_x.append(so)
+                    harmonic_y.append(float(power_to_db(harmonic_power, calibration_offset_db)))
+                    harmonic_text.append(f"{so:g}×")
+
+            if harmonic_x: fig_order.add_trace(go.Scatter(x=harmonic_x, y=harmonic_y, mode="markers+text", text=harmonic_text, textposition="top center", marker={"size": 10, "color": "#212529"}))
+            fig_order.update_layout(title=f"{t('Order Spektrumu', 'Order Spectrum')} — {float(fixed_rpm):.0f} RPM", xaxis_title=t("Mertebe / Order", "Order"), yaxis_title=t("dB SPL", "dB SPL"), height=560)
+            st.plotly_chart(fig_order, use_container_width=True)
+            report_data["figures"]["Order Plot"] = fig_order
+
+            st.markdown(t("### 🤖 Akıllı Teşhis", "### 🤖 Auto-Interpretation"))
+            if harmonic_x and harmonic_y:
+                max_idx = np.argmax(harmonic_y)
+                dominant_order = harmonic_x[max_idx]
+                max_db = harmonic_y[max_idx]
+                
+                if abs(dominant_order - 1.0) < 0.1: 
+                    diag_tr = "Sistemde 1x (1. Mertebe) seviyesi baskın. Muhtemel Kök Neden: Ana şaftta Balanssızlık (Unbalance)."
+                    diag_en = "1x (1st Order) level is dominant in the system. Probable Root Cause: Main shaft Unbalance."
+                elif abs(dominant_order - 2.0) < 0.1: 
+                    diag_tr = "Sistemde 2x (2. Mertebe) seviyesi baskın. Muhtemel Kök Neden: Kaplin/Şaft Eksen Kaçıklığı veya Gevşeklik (Misalignment / Looseness)."
+                    diag_en = "2x (2nd Order) level is dominant in the system. Probable Root Cause: Coupling/Shaft Misalignment or Looseness."
+                elif dominant_order % 1 != 0: 
+                    diag_tr = f"Sistemde {dominant_order}x (Küsuratlı Mertebe) seviyesi baskın. Muhtemel Kök Neden: Rulman arızası (Bearing defect) veya Kayış Kayması (Belt Slip)."
+                    diag_en = f"{dominant_order}x (Fractional Order) level is dominant. Probable Root Cause: Bearing defect or Belt Slip."
+                else: 
+                    diag_tr = f"Sistemde {dominant_order}x (Yüksek Tam Sayı) seviyesi baskın. Belirli kanat/diş sayısına sahip spesifik parçalar incelenmelidir."
+                    diag_en = f"{dominant_order}x (High Integer Order) level is dominant. Specific parts with a matching number of blades/teeth should be investigated."
+
+                diag_final = t(diag_tr, diag_en)
+                st.info(t(f"💡 **Bulgu:** En yüksek tepe noktası {max_db:.1f} dB ile {dominant_order}x mertebesinde tespit edildi.\n\n🔍 **Teşhis:** {diag_final}", f"💡 **Finding:** The highest peak was detected at order {dominant_order}x with {max_db:.1f} dB.\n\n🔍 **Diagnosis:** {diag_final}"))
+                report_data["diagnostics"]["Order Plot"] = diag_final
+
+        else:
+            if rpm_dataframe is None: st.warning(t("Değişken RPM analizi için CSV yükleyin.", "Upload a CSV for variable RPM."))
             else:
-                rpm_file = st.file_uploader("RPM CSV dosyası yükleyin:", type=["csv"])
-                if rpm_file is not None:
-                    rpm_df = pd.read_csv(rpm_file)
-                    time_col = st.selectbox("Zaman Kolonu:", rpm_df.columns)
-                    rpm_col = st.selectbox("RPM Kolonu:", rpm_df.columns)
+                rpm_time, rpm_values = prepare_rpm_series(rpm_dataframe, rpm_column, time_column, duration)
+                track_f, track_t, track_psd = spectrogram(audio_signal, fs=sample_rate, window="hann", nperseg=stft_size, noverlap=int(stft_size * 0.75), scaling="density", mode="psd")
+                rpm_at_stft, order_tracks = calculate_order_tracks(track_f, track_t, track_psd, rpm_time, rpm_values, selected_orders, 0.05, calibration_offset_db)
+                binned_tracks = bin_tracks_by_rpm(rpm_at_stft, order_tracks)
 
-            st.markdown("---")
-            lang = st.radio("Rapor Dili (Language):", ["TR", "EN"])
+                fig_tracking = go.Figure()
+                for so in selected_orders:
+                    col = f"order_{so:g}"
+                    if col in binned_tracks.columns: fig_tracking.add_trace(go.Scatter(x=binned_tracks["rpm"], y=binned_tracks[col], mode="lines+markers", name=f"{so:g}× Order"))
+                fig_tracking.update_layout(title=t("Order Tracking — RPM'e Göre Mertebe Seviyeleri", "Order Tracking"), xaxis_title="RPM", yaxis_title="dB SPL", height=580)
+                st.plotly_chart(fig_tracking, use_container_width=True)
+                report_data["figures"]["Order Plot"] = fig_tracking
 
-        if uploaded_file is not None:
-            st.success("Ses dosyası başarıyla yüklendi!" if lang=="TR" else "Audio file loaded successfully!")
+    with tab_ai:
+        speech_efforts_map = {
+            t("Normal", "Normal"): np.array([34.75, 34.27, 25.01, 17.32, 9.33, 1.13]),
+            t("Yüksek Sesle", "Raised"): np.array([41.5, 41.6, 35.5, 29.5, 22.8, 14.2]),
+            t("Bağırarak", "Loud"): np.array([45.4, 48.6, 46.1, 41.1, 35.6, 27.2]),
+            t("Çığlık Atarak", "Shout"): np.array([46.4, 53.3, 56.4, 52.1, 46.5, 38.0])
+        }
+        
+        col_speech, col_space = st.columns([1, 2])
+        with col_speech:
+            selected_effort = st.selectbox(t("İletişim Eforu", "Speech Effort"), list(speech_efforts_map.keys()))
+
+        octave_noise_levels = octave_band_levels(psd_frequencies, psd, calibration_offset_db, SII_OCTAVE_FREQS)
+        sii_table = compute_octave_sii(octave_noise_levels, speech_efforts_map[selected_effort])
+        sii_percent = float(sii_table["contribution"].sum()) * 100.0
+
+        color_sii = "#28a745" if sii_percent >= 75 else "#ffc107" if sii_percent >= 45 else "#dc3545"
+
+        col_gauge, col_bar = st.columns(2)
+        with col_gauge:
+            fig_gauge = go.Figure(go.Indicator(
+                mode="gauge+number", value=sii_percent, 
+                title={'text': f"<span style='font-size:18px;color:#212529'>SII Skoru</span>"}, 
+                domain={'x': [0, 1], 'y': [0, 1]},
+                gauge={
+                    'axis': {'range': [0, 100], 'tickwidth': 1, 'tickcolor': "darkblue"},
+                    'bar': {'color': color_sii},
+                    'bgcolor': "white", 'borderwidth': 2, 'bordercolor': "gray",
+                    'steps': [
+                        {'range': [0, 45], 'color': 'rgba(220, 53, 69, 0.3)'},
+                        {'range': [45, 75], 'color': 'rgba(255, 193, 7, 0.3)'},
+                        {'range': [75, 100], 'color': 'rgba(40, 167, 69, 0.3)'}
+                    ]
+                }
+            ))
+            fig_gauge.update_layout(height=400, margin=dict(t=50, b=30))
+            st.plotly_chart(fig_gauge, use_container_width=True)
+            report_data["figures"]["SII Gauge"] = fig_gauge
+
+        with col_bar:
+            fig_contribution = go.Figure(go.Bar(
+                x=[format_frequency(v) for v in sii_table["frequency_hz"]], y=100.0 * sii_table["contribution"], 
+                marker_color="#E61A25", marker_line_color="#B0101A", marker_line_width=1
+            ))
+            fig_contribution.update_layout(title=t("Frekanslara Göre SII Katkısı", "SII Contribution by Frequency"), height=400, bargap=0.1, xaxis_type='category')
+            st.plotly_chart(fig_contribution, use_container_width=True)
+            report_data["figures"]["SII Bands"] = fig_contribution
+
+        st.markdown(t("### 🤖 Akıllı Teşhis", "### 🤖 Auto-Interpretation"))
+        if sii_percent >= 75: 
+            diag_tr = "Makine çalışma gürültüsü, insan iletişimini engirmiyor. İş güvenliği açısından %100 güvenli ve konforlu bölge."
+            diag_en = "Machine operating noise does not hinder human communication. 100% safe and comfortable zone in terms of occupational safety."
+        elif sii_percent >= 45: 
+            diag_tr = "Makine gürültüsü konuşmaları kısmen maskeliyor. Etkili iletişim kurmak için personelin ses yükseltmesi gerekebilir."
+            diag_en = "Machine noise partially masks conversations. Personnel may need to raise their voice to communicate effectively."
+        else: 
+            diag_tr = "Makine gürültüsü insan sesini tamamen yutuyor. Operatörler için kulaklık/yalıtım kesinlikle zorunludur."
+            diag_en = "Machine noise completely swallows the human voice. Headsets/insulation are absolutely mandatory for operators."
+        
+        diag_final = t(diag_tr, diag_en)
+        st.info(t(f"💡 **Bulgu:** SII Değeri %{sii_percent:.1f}.\n\n🔍 **Teşhis:** {diag_final}", f"💡 **Finding:** SII Score is {sii_percent:.1f}%.\n\n🔍 **Diagnosis:** {diag_final}"))
+        report_data["diagnostics"]["SII Gauge"] = diag_final
+
+    with tab_octave:
+        octave_plot_df = third_octave_df[third_octave_df["exact_hz"] <= max_display_frequency].copy()
+        octave_plot_df["label"] = octave_plot_df["nominal_hz"].map(format_frequency)
+
+        fig_octave = go.Figure(go.Bar(
+            x=octave_plot_df["label"], y=octave_plot_df["level_db_spl"], 
+            marker_color="#E61A25", marker_line_color="#B0101A", marker_line_width=1
+        ))
+        fig_octave.update_layout(title=t("1/3 Oktav Bant Spektrumu", "1/3 Octave Band Spectrum"), height=560, bargap=0.05, xaxis_type='category', xaxis_tickangle=-45)
+        st.plotly_chart(fig_octave, use_container_width=True)
+        report_data["figures"]["1/3 Octave"] = fig_octave
+
+        st.markdown(t("### 🤖 Akıllı Teşhis", "### 🤖 Auto-Interpretation"))
+        low_freq_mask = (octave_plot_df["nominal_hz"] >= 20) & (octave_plot_df["nominal_hz"] <= 250)
+        high_freq_mask = (octave_plot_df["nominal_hz"] >= 2000) & (octave_plot_df["nominal_hz"] <= 10000)
+        
+        low_power = np.sum(10 ** (octave_plot_df.loc[low_freq_mask, "level_db_spl"] / 10))
+        high_power = np.sum(10 ** (octave_plot_df.loc[high_freq_mask, "level_db_spl"] / 10))
+        
+        low_db_total = 10 * np.log10(low_power) if low_power > 0 else 0
+        high_db_total = 10 * np.log10(high_power) if high_power > 0 else 0
+
+        if low_db_total > high_db_total + 5: 
+            diag_tr = "Spektrumun sol tarafı baskın. Yapısal titreşimler, balanssızlık veya kalın uğultu (rumble) sorunları ön planda."
+            diag_en = "Left side of the spectrum is dominant. Structural vibrations, unbalance, or deep rumble issues are prominent."
+        elif high_db_total > low_db_total + 5: 
+            diag_tr = "Spektrumun sağ tarafı baskın. Sürtünme, keçe deformasyonu veya tiz ıslık/whine sorunları ön planda."
+            diag_en = "Right side of the spectrum is dominant. Friction, seal deformation, or high-pitched whistle/whine issues are prominent."
+        else: 
+            diag_tr = "Gürültü enerjisi düşük ve yüksek frekanslar arasında dengeli dağılmış (Geniş bantlı gürültü karakteristiği)."
+            diag_en = "Noise energy is evenly distributed between low and high frequencies (Broadband noise characteristic)."
+
+        diag_final = t(diag_tr, diag_en)
+        st.info(t(f"📊 **Enerji Dağılımı:** Düşük Frekans Toplamı: {low_db_total:.1f} dB | Yüksek Frekans Toplamı: {high_db_total:.1f} dB\n\n🔍 **Teşhis:** {diag_final}", f"📊 **Energy Distribution:** Low Freq Total: {low_db_total:.1f} dB | High Freq Total: {high_db_total:.1f} dB\n\n🔍 **Diagnosis:** {diag_final}"))
+        report_data["diagnostics"]["1/3 Octave"] = diag_final
+
+    if PDF_ENABLED:
+        st.sidebar.markdown("---")
+        if st.sidebar.button(t("📄 PDF Raporu Hazırla", "📄 Prepare PDF Report"), use_container_width=True):
+            pdf_info_dialog(report_data)
+
+        if st.session_state.get("pdf_ready", False) and "pdf_bytes" in st.session_state:
+            st.sidebar.download_button(label=t("📥 PDF Raporunu İndir", "📥 Download PDF Report"), data=st.session_state["pdf_bytes"], file_name=f"Gates_NVH_Report_{uploaded_audio.name}.pdf", mime="application/pdf", use_container_width=True, type="primary")
+
+# ============================================================
+# 3. KARŞILAŞTIRMA MODU (A/B COMPARATIVE ANALYSIS)
+# ============================================================
+elif st.session_state.app_mode == "compare":
+    st.sidebar.header(t("📁 Karşılaştırmalı Veri Girişi", "📁 Comparative Data Entry"))
+
+    uploaded_files = st.sidebar.file_uploader(t("1. WAV Dosyaları (A ve B)", "1. WAV Files (A and B)"), type=["wav"], accept_multiple_files=True, on_change=reset_analysis)
+
+    ref_spl, test_spl = 80.0, 80.0
+    if len(uploaded_files) == 2:
+        st.sidebar.subheader(t("🎚️ SPL Kalibrasyonları (MAX HOLD)", "🎚️ SPL Calibrations (MAX HOLD)"))
+        ref_spl = st.sidebar.number_input(t(f"MAX SPL: A ({uploaded_files[0].name})", f"MAX SPL: A ({uploaded_files[0].name})"), min_value=20.0, max_value=140.0, value=80.0, step=0.1, on_change=reset_analysis)
+        test_spl = st.sidebar.number_input(t(f"MAX SPL: B ({uploaded_files[1].name})", f"MAX SPL: B ({uploaded_files[1].name})"), min_value=20.0, max_value=140.0, value=80.0, step=0.1, on_change=reset_analysis)
+    elif len(uploaded_files) > 2:
+        st.sidebar.error(t("Lütfen A/B analizi için tam olarak 2 adet dosya bırakın.", "Please leave exactly 2 files for A/B analysis."))
+    
+    st.sidebar.subheader(t("🏎️ RPM Bilgisi (Ortak)", "🏎️ Shared RPM Information"))
+    fixed_rpm = st.sidebar.number_input(t("Sabit dönüş hızı [RPM]", "Fixed rotation speed [RPM]"), min_value=1.0, value=1500.0, step=10.0, on_change=reset_analysis)
+
+    st.sidebar.markdown("---")
+
+    if st.sidebar.button(t("🚀 Karşılaştırmalı Analiz Yap", "🚀 Run Comparative Analysis"), type="primary", use_container_width=True):
+        if len(uploaded_files) == 2:
+            st.session_state.analyze = True
+            st.session_state.pdf_ready = False
+        else:
+            st.sidebar.error(t("Karşılaştırma için 2 adet dosya yüklemelisiniz!", "You must upload 2 files for comparison!"))
+
+    if not uploaded_files or len(uploaded_files) != 2:
+        st.info(t("ℹ️ A/B Testi için lütfen sol panelden **tam olarak 2 adet .wav** dosyası yükleyin.", 
+                  "ℹ️ For A/B Testing, please upload **exactly 2 .wav** files from the left panel."))
+        st.stop()
+
+    if not st.session_state.analyze:
+        st.info(t("👈 Ayarları tamamladıktan sonra 'Karşılaştırmalı Analiz Yap' butonuna tıklayın.", 
+                  "👈 After completing the settings, click 'Run Comparative Analysis'."))
+        st.stop()
+
+    with st.spinner(t("Karşılaştırmalı akustik veriler işleniyor...", "Processing comparative acoustic data...")):
+        
+        # Dosya A işleme
+        sr_A, sig_A = read_wav_mono(uploaded_files[0])
+        nyq_A = sr_A / 2.0
+        w_size_A = choose_segment_size(sig_A.size, 16384)
+        psd_f_A, psd_A = welch(sig_A, fs=sr_A, window="hann", nperseg=w_size_A, noverlap=w_size_A // 2, scaling="density")
+        calib_A, _ = calculate_calibration_offset(psd_f_A, psd_A, ref_spl, min(20000.0, nyq_A))
+        third_oct_A = third_octave_levels(psd_f_A, psd_A, calib_A, nyq_A)
+
+        # Dosya B işleme
+        sr_B, sig_B = read_wav_mono(uploaded_files[1])
+        nyq_B = sr_B / 2.0
+        w_size_B = choose_segment_size(sig_B.size, 16384)
+        psd_f_B, psd_B = welch(sig_B, fs=sr_B, window="hann", nperseg=w_size_B, noverlap=w_size_B // 2, scaling="density")
+        calib_B, _ = calculate_calibration_offset(psd_f_B, psd_B, test_spl, min(20000.0, nyq_B))
+        third_oct_B = third_octave_levels(psd_f_B, psd_B, calib_B, nyq_B)
+
+        max_display_frequency = min(20000.0, nyq_A, nyq_B)
+
+    st.success(t("✅ Karşılaştırmalı Analiz Tamamlandı!", "✅ Comparative Analysis Complete!"))
+
+    report_data = {
+        "file_name": f"{uploaded_files[0].name} vs {uploaded_files[1].name}",
+        "max_spl": f"A:{ref_spl} / B:{test_spl}",
+        "report_no": "COMP-REPORT",
+        "rpm_info": f"{fixed_rpm} RPM",
+        "figures": {}, "diagnostics": {}
+    }
+
+    tab_color, tab_order, tab_ai, tab_octave = st.tabs(["🌈 COLOR MAPS", "🏎️ ORDER PLOTS (A vs B)", "🧠 SII (A vs B)", "🎼 1/3 OCTAVE (A vs B)"])
+
+    # --- COLOR MAPS ---
+    with tab_color:
+        stft_size_A = choose_segment_size(sig_A.size, 4096)
+        sf_A, st_A, spsd_A = spectrogram(sig_A, fs=sr_A, window="hann", nperseg=stft_size_A, noverlap=int(stft_size_A * 0.75), mode="psd")
+        slvl_A = power_to_db(spsd_A * (sf_A[1]-sf_A[0]), calib_A)
+        mask_A = (sf_A >= 20.0) & (sf_A <= max_display_frequency)
+
+        stft_size_B = choose_segment_size(sig_B.size, 4096)
+        sf_B, st_B, spsd_B = spectrogram(sig_B, fs=sr_B, window="hann", nperseg=stft_size_B, noverlap=int(stft_size_B * 0.75), mode="psd")
+        slvl_B = power_to_db(spsd_B * (sf_B[1]-sf_B[0]), calib_B)
+        mask_B = (sf_B >= 20.0) & (sf_B <= max_display_frequency)
+
+        col_A, col_B = st.columns(2)
+        with col_A:
+            fig_cmap_A = go.Figure(go.Heatmap(x=st_A, y=sf_A[mask_A], z=slvl_A[mask_A, :], colorscale="Turbo", zmin=ref_spl-80, zmax=ref_spl+5, colorbar={"title": t("Seviye<br>[dB]", "Level<br>[dB]")}))
+            fig_cmap_A.update_layout(title=t(f"Dosya A: {uploaded_files[0].name}", f"File A: {uploaded_files[0].name}"), xaxis_title=t("Zaman [s]", "Time [s]"), yaxis_title=t("Frekans [Hz]", "Frequency [Hz]"), yaxis_type="log", height=450)
+            st.plotly_chart(fig_cmap_A, use_container_width=True)
+            report_data["figures"]["Color Map (A - Referans)"] = fig_cmap_A
+
+        with col_B:
+            fig_cmap_B = go.Figure(go.Heatmap(x=st_B, y=sf_B[mask_B], z=slvl_B[mask_B, :], colorscale="Turbo", zmin=test_spl-80, zmax=test_spl+5, colorbar={"title": t("Seviye<br>[dB]", "Level<br>[dB]")}))
+            fig_cmap_B.update_layout(title=t(f"Dosya B: {uploaded_files[1].name}", f"File B: {uploaded_files[1].name}"), xaxis_title=t("Zaman [s]", "Time [s]"), yaxis_title=t("Frekans [Hz]", "Frequency [Hz]"), yaxis_type="log", height=450)
+            st.plotly_chart(fig_cmap_B, use_container_width=True)
+            report_data["figures"]["Color Map (B - Test)"] = fig_cmap_B
             
-            with st.spinner("Analiz ediliyor... (Processing...)" if lang=="TR" else "Processing..."):
-                sample_rate, data = wavfile.read(uploaded_file)
-                if len(data.shape) > 1:
-                    data = data[:, 0]
-                    
-                data = data.astype(np.float32)
-                data_max = np.max(np.abs(data))
-                if data_max == 0: data_max = 1
-                
-                calib_factor = (10 ** (max_db_input / 20)) / data_max
-                data_calibrated = data * calib_factor
+        st.markdown(t("### 🤖 Akıllı Teşhis", "### 🤖 Auto-Interpretation"))
+        db_matrix_A = slvl_A[mask_A, :]
+        db_matrix_B = slvl_B[mask_B, :]
+        
+        # A Dosyası Teşhisi
+        time_var_A = np.var(np.mean(db_matrix_A, axis=0))
+        freq_var_A = np.var(np.mean(db_matrix_A, axis=1))
+        if time_var_A > freq_var_A * 1.5:
+            diag_A_tr, diag_A_en = "Dikey izler tespit edildi. Kök Neden: Anlık vuruntu/darbe.", "Vertical traces detected. Root Cause: Instantaneous knocks/impact."
+        elif freq_var_A > time_var_A * 1.5:
+            diag_A_tr, diag_A_en = "Yatay bantlar tespit edildi. Kök Neden: Sürekli sürtünme/harmonik.", "Horizontal bands detected. Root Cause: Continuous friction/harmonic."
+        else:
+            diag_A_tr, diag_A_en = "Karmaşık geniş bantlı gürültü profili gözlemleniyor.", "Complex broadband noise profile is observed."
 
-                f_welch, Pxx = signal.welch(data_calibrated, sample_rate, nperseg=16384, window='hann')
-                f_welch = f_welch[f_welch > 0]
-                Pxx = Pxx[f_welch > 0]
-                spectrum_db = 10 * np.log10(Pxx / (2e-5)**2)
-                
-                f_mask = f_welch <= max_display_frequency
-                f_welch = f_welch[f_mask]
-                spectrum_db = spectrum_db[f_mask]
+        # B Dosyası Teşhisi
+        time_var_B = np.var(np.mean(db_matrix_B, axis=0))
+        freq_var_B = np.var(np.mean(db_matrix_B, axis=1))
+        if time_var_B > freq_var_B * 1.5:
+            diag_B_tr, diag_B_en = "Dikey izler tespit edildi. Kök Neden: Anlık vuruntu/darbe.", "Vertical traces detected. Root Cause: Instantaneous knocks/impact."
+        elif freq_var_B > time_var_B * 1.5:
+            diag_B_tr, diag_B_en = "Yatay bantlar tespit edildi. Kök Neden: Sürekli sürtünme/harmonik.", "Horizontal bands detected. Root Cause: Continuous friction/harmonic."
+        else:
+            diag_B_tr, diag_B_en = "Karmaşık geniş bantlı gürültü profili gözlemleniyor.", "Complex broadband noise profile is observed."
 
-                f_stft, t_stft, Zxx = signal.stft(data_calibrated, sample_rate, nperseg=4096, window='hann')
-                Zxx_db = 10 * np.log10(np.abs(Zxx)**2 / (2e-5)**2)
-                Zxx_db = np.clip(Zxx_db, 0, None)
-                f_stft_mask = (f_stft > 0) & (f_stft <= max_display_frequency)
-                f_stft = f_stft[f_stft_mask]
-                Zxx_db = Zxx_db[f_stft_mask, :]
+        # Karşılaştırma Teşhisi
+        mean_db_A = np.mean(db_matrix_A)
+        mean_db_B = np.mean(db_matrix_B)
+        diff_mean = mean_db_B - mean_db_A
 
-                # 1/3 Octave 
-                third_oct_dbs = []
-                third_oct_freqs = []
-                for band in exact_bands:
-                    lower = band / (2 ** (1/6))
-                    upper = band * (2 ** (1/6))
-                    mask = (f_welch >= lower) & (f_welch <= upper)
-                    if np.any(mask):
-                        band_db = 10 * np.log10(np.sum(10**(spectrum_db[mask]/10)))
-                        third_oct_dbs.append(band_db)
-                        third_oct_freqs.append(band)
-                
-                third_oct_df = pd.DataFrame({
-                    "exact_hz": third_oct_freqs,
-                    "Band (Hz)": [f"{f/1000}k" if f>=1000 else str(int(f)) for f in nominal_bands[:len(third_oct_freqs)]],
-                    "SPL (dB)": third_oct_dbs
-                })
-                oct_df = third_oct_df[third_oct_df["exact_hz"] <= max_display_frequency].copy()
-                
-                A_weight = apply_a_weighting(oct_df["exact_hz"].values)
-                oct_df["dBA"] = oct_df["SPL (dB)"] + A_weight
+        if diff_mean > 3:
+            if time_var_B > freq_var_B * 1.5:
+                diag_comp_tr = f"B dosyasında (+{diff_mean:.1f} dB) artış ve vuruntu oluşumu gözlemlendi. Mekanik çarpma/darbe ihtimali."
+                diag_comp_en = f"Energy increase (+{diff_mean:.1f} dB) and knock formation observed in File B. Potential mechanical impact."
+            elif freq_var_B > time_var_B * 1.5:
+                diag_comp_tr = f"B dosyasında (+{diff_mean:.1f} dB) artış ve sürtünme/inilti oluşumu tespit edildi."
+                diag_comp_en = f"Energy increase (+{diff_mean:.1f} dB) and friction/whine formation detected in File B."
+            else:
+                diag_comp_tr = f"B dosyasında A'ya göre geniş bantlı gürültü enerjisi artışı (+{diff_mean:.1f} dB) tespit edildi."
+                diag_comp_en = f"A broadband noise energy increase (+{diff_mean:.1f} dB) was detected in File B compared to A."
+        elif diff_mean < -3:
+            diag_comp_tr = f"B dosyasında A'ya göre genel gürültü enerjisinde iyileşme/düşüş ({abs(diff_mean):.1f} dB) tespit edildi."
+            diag_comp_en = f"An improvement/decrease in overall noise energy ({abs(diff_mean):.1f} dB) was detected in File B compared to A."
+        else:
+            diag_comp_tr = "Her iki dosyanın spektrogram (zaman-frekans) enerji dağılımları büyük ölçüde benzerdir."
+            diag_comp_en = "The spectrogram (time-frequency) energy distributions of both files are largely similar."
 
-            report_data = {"figures": {}, "diagnostics": {}}
-            tab1, tab2, tab3, tab4 = st.tabs(["Color Maps", "Order Plots", "Articulation Index (SII)", "1/3 Octave"])
+        final_diag_text = (
+            f"🟦 **A ({uploaded_files[0].name}):** {t(diag_A_tr, diag_A_en)}\n\n"
+            f"🟥 **B ({uploaded_files[1].name}):** {t(diag_B_tr, diag_B_en)}\n\n"
+            f"⚖️ **{t('KARŞILAŞTIRMA', 'COMPARISON')}:** {t(diag_comp_tr, diag_comp_en)}"
+        )
+        
+        st.info(final_diag_text)
+        report_data["diagnostics"]["Color Map (B - Test)"] = [
+            (f"A ({uploaded_files[0].name})", t(diag_A_tr, diag_A_en)),
+            (f"B ({uploaded_files[1].name})", t(diag_B_tr, diag_B_en)),
+            (t("KARŞILAŞTIRMA", "COMPARISON"), t(diag_comp_tr, diag_comp_en))
+        ]
+
+    # --- ORDER PLOTS ---
+    with tab_order:
+        rot_hz = float(fixed_rpm) / 60.0
+        max_ord = st.slider(t("Gösterilecek maksimum order", "Maximum order to display"), 1.0, 10.0, 5.0, 0.5)
+        
+        ord_df_A = order_spectrum_from_psd(psd_f_A, psd_A, rot_hz, max_ord, 0.05, calib_A)
+        ord_df_B = order_spectrum_from_psd(psd_f_B, psd_B, rot_hz, max_ord, 0.05, calib_B)
+
+        fig_ord_comp = go.Figure()
+        fig_ord_comp.add_trace(go.Scatter(x=ord_df_A["order"], y=ord_df_A["level_db_spl"], mode="lines", name=t(f"A: {uploaded_files[0].name}", f"A: {uploaded_files[0].name}"), line=dict(color="#1f77b4", width=2)))
+        fig_ord_comp.add_trace(go.Scatter(x=ord_df_B["order"], y=ord_df_B["level_db_spl"], mode="lines", name=t(f"B: {uploaded_files[1].name}", f"B: {uploaded_files[1].name}"), line=dict(color="#E61A25", width=2)))
+        fig_ord_comp.update_layout(title=t("Karşılaştırmalı Order Spektrumu (A vs B)", "Comparative Order Spectrum (A vs B)"), xaxis_title="Order", yaxis_title="dB SPL", height=500)
+        st.plotly_chart(fig_ord_comp, use_container_width=True)
+        report_data["figures"]["Order Plot"] = fig_ord_comp
+
+        st.markdown(t("### 🤖 Akıllı Teşhis", "### 🤖 Auto-Interpretation"))
+        if not ord_df_A.empty and not ord_df_B.empty:
+            # A Dosyası Teşhisi
+            max_idx_A = ord_df_A["level_db_spl"].idxmax()
+            ord_A_dom = ord_df_A.loc[max_idx_A, "order"]
+            if abs(ord_A_dom - 1.0) < 0.1:
+                diag_A_tr, diag_A_en = "1x (1. Mertebe) baskın. Neden: Ana şaftta Balanssızlık.", "1x (1st Order) dominant. Cause: Main shaft Unbalance."
+            elif abs(ord_A_dom - 2.0) < 0.1:
+                diag_A_tr, diag_A_en = "2x (2. Mertebe) baskın. Neden: Eksen Kaçıklığı/Gevşeklik.", "2x (2nd Order) dominant. Cause: Misalignment/Looseness."
+            elif ord_A_dom % 1 != 0:
+                diag_A_tr, diag_A_en = f"{ord_A_dom}x (Küsuratlı) baskın. Neden: Rulman/Kayış.", f"{ord_A_dom}x (Fractional) dominant. Cause: Bearing/Belt."
+            else:
+                diag_A_tr, diag_A_en = f"{ord_A_dom}x (Tam Sayı) baskın. Spesifik parçaları inceleyin.", f"{ord_A_dom}x (Integer) dominant. Investigate specific parts."
+
+            # B Dosyası Teşhisi
+            max_idx_B = ord_df_B["level_db_spl"].idxmax()
+            ord_B_dom = ord_df_B.loc[max_idx_B, "order"]
+            if abs(ord_B_dom - 1.0) < 0.1:
+                diag_B_tr, diag_B_en = "1x (1. Mertebe) baskın. Neden: Ana şaftta Balanssızlık.", "1x (1st Order) dominant. Cause: Main shaft Unbalance."
+            elif abs(ord_B_dom - 2.0) < 0.1:
+                diag_B_tr, diag_B_en = "2x (2. Mertebe) baskın. Neden: Eksen Kaçıklığı/Gevşeklik.", "2x (2nd Order) dominant. Cause: Misalignment/Looseness."
+            elif ord_B_dom % 1 != 0:
+                diag_B_tr, diag_B_en = f"{ord_B_dom}x (Küsuratlı) baskın. Neden: Rulman/Kayış.", f"{ord_B_dom}x (Fractional) dominant. Cause: Bearing/Belt."
+            else:
+                diag_B_tr, diag_B_en = f"{ord_B_dom}x (Tam Sayı) baskın. Spesifik parçaları inceleyin.", f"{ord_B_dom}x (Integer) dominant. Investigate specific parts."
+
+            # Karşılaştırma Teşhisi
+            val_A = ord_df_A.loc[max_idx_B, "level_db_spl"] 
+            val_B = ord_df_B.loc[max_idx_B, "level_db_spl"]
+            diff = val_B - val_A
+
+            if diff > 3:
+                diag_comp_tr = f"B dosyasında {ord_B_dom}x mertebesinde, A'ya göre +{diff:.1f} dB artış tespit edildi. Mekanik aşınma/bozulma mevcut."
+                diag_comp_en = f"A +{diff:.1f} dB increase was detected in File B at order {ord_B_dom}x compared to A. Mechanical wear present."
+            elif diff < -3:
+                diag_comp_tr = f"B dosyasında {ord_B_dom}x mertebesinde A'ya göre {abs(diff):.1f} dB iyileşme (düşüş) mevcut."
+                diag_comp_en = f"The noise in File B has improved by {abs(diff):.1f} dB at order {ord_B_dom}x compared to A."
+            else:
+                diag_comp_tr = "Her iki dosyanın mertebe gürültü seviyeleri benzer karakteristikte."
+                diag_comp_en = "The order noise levels of both files have similar characteristics."
+
+            final_diag_text = (
+                f"🟦 **A ({uploaded_files[0].name}):** {t(diag_A_tr, diag_A_en)}\n\n"
+                f"🟥 **B ({uploaded_files[1].name}):** {t(diag_B_tr, diag_B_en)}\n\n"
+                f"⚖️ **{t('KARŞILAŞTIRMA', 'COMPARISON')}:** {t(diag_comp_tr, diag_comp_en)}"
+            )
             
-            # --- TAB 1: COLOR MAPS ---
-            with tab1:
-                st.subheader("Color Maps (Acoustic Spectrogram)")
-                fig_cm = go.Figure(data=go.Heatmap(
-                    z=Zxx_db, x=t_stft, y=f_stft,
-                    colorscale='Jet',
-                    colorbar=dict(title="Seviye [dB]" if lang=="TR" else "Level [dB]")
-                ))
-                fig_cm.update_layout(
-                    xaxis_title="Zaman [s]" if lang=="TR" else "Time [s]",
-                    yaxis_title="Frekans [Hz]" if lang=="TR" else "Frequency [Hz]",
-                    yaxis_type="log",
-                    height=500,
-                    margin=dict(l=50, r=50, t=30, b=50)
-                )
-                st.plotly_chart(fig_cm, use_container_width=True)
-                report_data["figures"]["Color Map"] = fig_cm
+            st.info(final_diag_text)
+            report_data["diagnostics"]["Order Plot"] = [
+                (f"A ({uploaded_files[0].name})", t(diag_A_tr, diag_A_en)),
+                (f"B ({uploaded_files[1].name})", t(diag_B_tr, diag_B_en)),
+                (t("KARŞILAŞTIRMA", "COMPARISON"), t(diag_comp_tr, diag_comp_en))
+            ]
 
-            # --- TAB 2: ORDER PLOTS ---
-            with tab2:
-                st.subheader("Order Plots (Harmonic Analysis)")
-                base_freq = rpm_fixed / 60.0
-                orders = f_welch / base_freq
-                
-                fig_op = go.Figure()
-                fig_op.add_trace(go.Scatter(x=orders, y=spectrum_db, mode='lines', name='Order', line=dict(color='#E61A25')))
-                fig_op.update_layout(
-                    xaxis_title="Mertebe (Order)" if lang=="TR" else "Order",
-                    yaxis_title="Genlik (dB)" if lang=="TR" else "Amplitude (dB)",
-                    xaxis=dict(range=[0, 10]),
-                    height=450,
-                    margin=dict(l=50, r=50, t=30, b=50)
-                )
-                st.plotly_chart(fig_op, use_container_width=True)
-                
-                diag_text = ""
-                peak_order = orders[np.argmax(spectrum_db)]
-                if 0.8 < peak_order < 1.2:
-                    diag_text = "Ana saftta balanssizlik (Unbalance) tespiti." if lang=="TR" else "Main shaft unbalance detected."
-                elif 1.8 < peak_order < 2.2:
-                    diag_text = "Kaplin/saft eksen kacikligi (Misalignment) tespiti." if lang=="TR" else "Coupling/shaft misalignment detected."
-                else:
-                    diag_text = f"Baskin mertebe: {peak_order:.1f}x. Spesifik bilesen (rulman/fan) kaynagi." if lang=="TR" else f"Dominant order: {peak_order:.1f}x. Specific component source."
-                
-                st.info(f"**{'Teşhis' if lang=='TR' else 'Diagnosis'}:** {diag_text}")
-                report_data["figures"]["Order Plot"] = fig_op
-                report_data["diagnostics"]["Order Plot"] = diag_text
+    # --- SII COMP ---
+    with tab_ai:
+        speech_efforts_map = {
+            t("Normal", "Normal"): np.array([34.75, 34.27, 25.01, 17.32, 9.33, 1.13]),
+            t("Yüksek Sesle", "Raised"): np.array([41.5, 41.6, 35.5, 29.5, 22.8, 14.2])
+        }
+        selected_eff_comp = st.selectbox(t("İletişim Eforu", "Speech Effort"), list(speech_efforts_map.keys()), key="comp_eff")
+        
+        oct_A = octave_band_levels(psd_f_A, psd_A, calib_A, SII_OCTAVE_FREQS)
+        sii_df_A = compute_octave_sii(oct_A, speech_efforts_map[selected_eff_comp])
+        sii_pct_A = float(sii_df_A["contribution"].sum()) * 100.0
+        
+        oct_B = octave_band_levels(psd_f_B, psd_B, calib_B, SII_OCTAVE_FREQS)
+        sii_df_B = compute_octave_sii(oct_B, speech_efforts_map[selected_eff_comp])
+        sii_pct_B = float(sii_df_B["contribution"].sum()) * 100.0
 
-            # --- TAB 3: SII ---
-            with tab3:
-                st.subheader("Articulation Index / SII Analysis")
-                sii_val, sii_contrib = calculate_sii(f_welch, spectrum_db)
-                
-                fig_sii = go.Figure(go.Indicator(
-                    mode = "gauge+number",
-                    value = sii_val,
-                    domain = {'x': [0, 1], 'y': [0, 1]},
-                    gauge = {
-                        'axis': {'range': [0, 100]},
-                        'bar': {'color': "darkgray"},
-                        'steps': [
-                            {'range': [0, 45], 'color': "lightpink"},
-                            {'range': [45, 75], 'color': "palegoldenrod"},
-                            {'range': [75, 100], 'color': "lightgreen"}
-                        ]
-                    }
-                ))
-                fig_sii.update_layout(height=350, margin=dict(t=20, b=20))
-                st.plotly_chart(fig_sii, use_container_width=True)
-                
-                bands_str = [f"{b/1000}k" if b>=1000 else str(b) for b in sii_bands]
-                contrib_vals = [sii_contrib[b] for b in sii_bands]
-                
-                fig_contrib = go.Figure(data=[go.Bar(
-                    x=bands_str, y=contrib_vals, 
-                    marker_color='#E61A25',
-                    marker_line_color='#8B0000',
-                    marker_line_width=1.5
-                )])
-                fig_contrib.update_layout(
-                    title="SII Bant Katkıları" if lang=="TR" else "SII Band Contributions",
-                    xaxis_type='category',
-                    height=250, 
-                    margin=dict(t=30, b=20)
-                )
-                st.plotly_chart(fig_contrib, use_container_width=True)
-                
-                diag_sii = generate_sii_diagnosis(sii_val, lang)
-                st.info(f"**{'Teşhis' if lang=='TR' else 'Diagnosis'}:** {diag_sii}")
-                
-                report_data["figures"]["SII Gauge"] = fig_sii
-                report_data["figures"]["SII Bands"] = fig_contrib
-                report_data["diagnostics"]["SII Gauge"] = diag_sii
+        # Subplot title'larını kaldırdık, çakışmayı önlemek için HTML ile indicator'ın kendi içine gömeceğiz.
+        fig_gauge_comp = make_subplots(rows=1, cols=2, specs=[[{'type': 'indicator'}, {'type': 'indicator'}]])
+        
+        color_A = "#28a745" if sii_pct_A >= 75 else "#ffc107" if sii_pct_A >= 45 else "#dc3545"
+        color_B = "#28a745" if sii_pct_B >= 75 else "#ffc107" if sii_pct_B >= 45 else "#dc3545"
 
-            # --- TAB 4: 1/3 OCTAVE ---
-            with tab4:
-                st.subheader("1/3 Octave Band Spectrum")
-                fig_oct = go.Figure(data=[go.Bar(
-                    x=oct_df["Band (Hz)"], 
-                    y=oct_df["SPL (dB)"], 
-                    marker_color='#E61A25',
-                    marker_line_color='#8B0000',
-                    marker_line_width=1
-                )])
-                fig_oct.update_layout(
-                    xaxis_title="Frekans Bandı (Hz)" if lang=="TR" else "Frequency Band (Hz)",
-                    yaxis_title="SPL (dB)",
-                    xaxis_type='category',
-                    height=400,
-                    margin=dict(l=50, r=50, t=30, b=50)
-                )
-                st.plotly_chart(fig_oct, use_container_width=True)
-                
-                max_band = oct_df.loc[oct_df["SPL (dB)"].idxmax(), "Band (Hz)"]
-                if oct_df["SPL (dB)"].idxmax() < len(oct_df)/3:
-                    diag_oct = f"Dusuk frekanslarda ({max_band} Hz) yuksek enerji. Ugultu/Titresim sorunu." if lang=="TR" else f"High energy at low frequencies ({max_band} Hz). Hum/Vibration issue."
-                else:
-                    diag_oct = f"Yuksek frekanslarda ({max_band} Hz) sivriler. Tiz islik/surtunme problemi." if lang=="TR" else f"Spikes at high frequencies ({max_band} Hz). Whistle/Friction issue."
-                
-                st.info(f"**{'Teşhis' if lang=='TR' else 'Diagnosis'}:** {diag_oct}")
-                report_data["figures"]["1/3 Octave"] = fig_oct
-                report_data["diagnostics"]["1/3 Octave"] = diag_oct
+        fig_gauge_comp.add_trace(go.Indicator(mode="gauge+number", value=sii_pct_A, 
+            title={'text': f"<span style='font-size:14px;color:gray'>{uploaded_files[0].name}</span><br><span style='font-size:18px;color:#212529'>SII A</span>"},
+            domain={'x': [0, 1], 'y': [0, 1]},
+            gauge={'axis': {'range': [0, 100], 'tickwidth': 1, 'tickcolor': "darkblue"}, 'bar': {'color': color_A}, 'bgcolor': "white", 'borderwidth': 2, 'bordercolor': "gray", 'steps': [{'range': [0, 45], 'color': 'rgba(220, 53, 69, 0.3)'}, {'range': [45, 75], 'color': 'rgba(255, 193, 7, 0.3)'}, {'range': [75, 100], 'color': 'rgba(40, 167, 69, 0.3)'}]}
+        ), row=1, col=1)
+        fig_gauge_comp.add_trace(go.Indicator(mode="gauge+number", value=sii_pct_B, 
+            title={'text': f"<span style='font-size:14px;color:gray'>{uploaded_files[1].name}</span><br><span style='font-size:18px;color:#212529'>SII B</span>"},
+            domain={'x': [0, 1], 'y': [0, 1]},
+            gauge={'axis': {'range': [0, 100], 'tickwidth': 1, 'tickcolor': "darkblue"}, 'bar': {'color': color_B}, 'bgcolor': "white", 'borderwidth': 2, 'bordercolor': "gray", 'steps': [{'range': [0, 45], 'color': 'rgba(220, 53, 69, 0.3)'}, {'range': [45, 75], 'color': 'rgba(255, 193, 7, 0.3)'}, {'range': [75, 100], 'color': 'rgba(40, 167, 69, 0.3)'}]}
+        ), row=1, col=2)
+        fig_gauge_comp.update_layout(height=380, margin=dict(t=70, b=20))
+        st.plotly_chart(fig_gauge_comp, use_container_width=True)
+        report_data["figures"]["SII Gauge"] = fig_gauge_comp
 
-            # Rapor Oluşturma
-            st.markdown("---")
-            st.header("📄 PDF Raporu Oluştur (Generate Report)")
-            with st.form("antet_form"):
-                col1, col2 = st.columns(2)
-                with col1:
-                    report_no = st.text_input("Report-No.:", "E4119 R0010")
-                    customer = st.text_input("Customer:", "Gates Internal")
-                    project = st.text_input("Project:", "NVH Assessment")
-                with col2:
-                    sample_no = st.text_input("Sample No.:", "Sample-01")
-                    material = st.text_input("Material:", "EPDM Belt")
-                    technician = st.text_input("Technician:", "Test Lab. Eng.")
-                    test_date = st.date_input("Date:")
-                
-                submit_btn = st.form_submit_button("Raporu Hazırla" if lang=="TR" else "Generate Report")
-                
-                if submit_btn:
-                    antet_data = {
-                        "report_no": report_no, "customer": customer, "project": project,
-                        "technician": technician, "sample_no": sample_no, "material": material,
-                        "test_date": str(test_date)
-                    }
-                    pdf_path = build_pdf_report(report_data, antet_data)
-                    with open(pdf_path, "rb") as f:
-                        st.download_button("📥 PDF İndir (Download PDF)", data=f, file_name=f"NVH_Report_{report_no}.pdf", mime="application/pdf")
+        fig_sii_bands = go.Figure()
+        fig_sii_bands.add_trace(go.Bar(x=[format_frequency(v) for v in sii_df_A["frequency_hz"]], y=100.0 * sii_df_A["contribution"], name="File A", marker_color="#1f77b4", marker_line_color="#10446b", marker_line_width=1))
+        fig_sii_bands.add_trace(go.Bar(x=[format_frequency(v) for v in sii_df_B["frequency_hz"]], y=100.0 * sii_df_B["contribution"], name="File B", marker_color="#E61A25", marker_line_color="#B0101A", marker_line_width=1))
+        fig_sii_bands.update_layout(title="SII Katkısı (A vs B)", barmode='group', height=350, bargap=0.1, xaxis_type='category')
+        st.plotly_chart(fig_sii_bands, use_container_width=True)
+        report_data["figures"]["SII Bands"] = fig_sii_bands
 
-    # =====================================================================
-    # 2. KARŞILAŞTIRMA MODU (A/B COMPARATIVE ANALYSIS)
-    # =====================================================================
-    elif st.session_state.app_mode == "compare":
-        with st.sidebar:
-            st.header("2. Karşılaştırma Verileri (A/B)")
-            file_A = st.file_uploader("Dosya A (Referans):", type=["wav"], key="file_a")
-            file_B = st.file_uploader("Dosya B (Test/Arızalı):", type=["wav"], key="file_b")
-            
-            st.markdown("---")
-            max_db_A = st.number_input("MAX SPL - Dosya A [dB]:", value=85.0, step=0.1)
-            max_db_B = st.number_input("MAX SPL - Dosya B [dB]:", value=85.0, step=0.1)
-            
-            rpm_fixed_A = st.number_input("RPM - Dosya A:", value=1500, step=10)
-            rpm_fixed_B = st.number_input("RPM - Dosya B:", value=1500, step=10)
-            
-            st.markdown("---")
-            lang = st.radio("Rapor Dili (Language):", ["TR", "EN"], key="lang_cmp")
+        st.markdown(t("### 🤖 Akıllı Teşhis", "### 🤖 Auto-Interpretation"))
+        
+        # A Dosyası Teşhisi
+        if sii_pct_A >= 75: diag_A_tr, diag_A_en = "%100 güvenli ve konforlu iletişim bölgesi.", "100% safe and comfortable communication zone."
+        elif sii_pct_A >= 45: diag_A_tr, diag_A_en = "İletişim kısmen maskeleniyor.", "Communication is partially masked."
+        else: diag_A_tr, diag_A_en = "İletişim tamamen yutuluyor (İzolasyon zorunlu).", "Communication is completely swallowed (Insulation mandatory)."
+        
+        # B Dosyası Teşhisi
+        if sii_pct_B >= 75: diag_B_tr, diag_B_en = "%100 güvenli ve konforlu iletişim bölgesi.", "100% safe and comfortable communication zone."
+        elif sii_pct_B >= 45: diag_B_tr, diag_B_en = "İletişim kısmen maskeleniyor.", "Communication is partially masked."
+        else: diag_B_tr, diag_B_en = "İletişim tamamen yutuluyor (İzolasyon zorunlu).", "Communication is completely swallowed (Insulation mandatory)."
 
-        if file_A is not None and file_B is not None:
-            st.success("Her iki dosya da yüklendi!" if lang=="TR" else "Both files loaded successfully!")
-            
-            with st.spinner("Karşılaştırma hesaplanıyor... (Processing...)" if lang=="TR" else "Processing Comparison..."):
-                # --- SİNYAL İŞLEME FONKSİYONU ---
-                def process_signal(file_obj, max_db):
-                    sr, data = wavfile.read(file_obj)
-                    if len(data.shape) > 1: data = data[:, 0]
-                    data = data.astype(np.float32)
-                    d_max = np.max(np.abs(data))
-                    if d_max == 0: d_max = 1
-                    data_cal = data * ((10 ** (max_db / 20)) / d_max)
-                    
-                    fw, Pxx = signal.welch(data_cal, sr, nperseg=16384, window='hann')
-                    fw = fw[fw > 0]
-                    Pxx = Pxx[fw > 0]
-                    spec_db = 10 * np.log10(Pxx / (2e-5)**2)
-                    
-                    fstft, tstft, Zxx = signal.stft(data_cal, sr, nperseg=4096, window='hann')
-                    Zdb = 10 * np.log10(np.abs(Zxx)**2 / (2e-5)**2)
-                    Zdb = np.clip(Zdb, 0, None)
-                    return sr, fw, spec_db, fstft, tstft, Zdb
+        # Karşılaştırma Teşhisi
+        diff_sii = sii_pct_B - sii_pct_A
+        if diff_sii < -10:
+            diag_comp_tr = f"B dosyasında makine gürültüsü, A'ya göre iletişimi %{abs(diff_sii):.1f} daha fazla engelliyor."
+            diag_comp_en = f"Machine noise in File B masks communication {abs(diff_sii):.1f}% more than File A."
+        elif diff_sii > 10:
+            diag_comp_tr = f"B dosyasında makine gürültüsü azalmış ve iletişim ortamı %{diff_sii:.1f} iyileşmiş."
+            diag_comp_en = f"Machine noise has decreased in File B, and communication improved by {diff_sii:.1f}%."
+        else:
+            diag_comp_tr = "İki dosya arasında insan iletişimini engelleme açısından belirgin bir fark yoktur."
+            diag_comp_en = "No significant difference between the two files in terms of hindering communication."
 
-                sr_A, fw_A, spec_A, fstft_A, tstft_A, Zdb_A = process_signal(file_A, max_db_A)
-                sr_B, fw_B, spec_B, fstft_B, tstft_B, Zdb_B = process_signal(file_B, max_db_B)
+        final_diag_text = (
+            f"🟦 **A ({uploaded_files[0].name}) [SII: %{sii_pct_A:.1f}]:** {t(diag_A_tr, diag_A_en)}\n\n"
+            f"🟥 **B ({uploaded_files[1].name}) [SII: %{sii_pct_B:.1f}]:** {t(diag_B_tr, diag_B_en)}\n\n"
+            f"⚖️ **{t('KARŞILAŞTIRMA', 'COMPARISON')}:** {t(diag_comp_tr, diag_comp_en)}"
+        )
 
-                # Frekans kırpma (20 kHz sınırı)
-                mask_A = fw_A <= max_display_frequency
-                fw_A, spec_A = fw_A[mask_A], spec_A[mask_A]
-                mask_B = fw_B <= max_display_frequency
-                fw_B, spec_B = fw_B[mask_B], spec_B[mask_B]
+        st.info(final_diag_text)
+        report_data["diagnostics"]["SII Gauge"] = [
+            (f"A ({uploaded_files[0].name}) [SII: %{sii_pct_A:.1f}]", t(diag_A_tr, diag_A_en)),
+            (f"B ({uploaded_files[1].name}) [SII: %{sii_pct_B:.1f}]", t(diag_B_tr, diag_B_en)),
+            (t("KARŞILAŞTIRMA", "COMPARISON"), t(diag_comp_tr, diag_comp_en))
+        ]
 
-                stft_mask_A = fstft_A <= max_display_frequency
-                fstft_A, Zdb_A = fstft_A[stft_mask_A], Zdb_A[stft_mask_A, :]
-                stft_mask_B = fstft_B <= max_display_frequency
-                fstft_B, Zdb_B = fstft_B[stft_mask_B], Zdb_B[stft_mask_B, :]
+    # --- OCTAVE COMP ---
+    with tab_octave:
+        oct_df_A = third_oct_A[third_oct_A["exact_hz"] <= max_display_frequency].copy()
+        oct_df_B = third_oct_B[third_oct_B["exact_hz"] <= max_display_frequency].copy()
+        
+        fig_oct_comp = go.Figure()
+        fig_oct_comp.add_trace(go.Bar(x=oct_df_A["nominal_hz"].map(format_frequency), y=oct_df_A["level_db_spl"], name="File A", marker_color="#1f77b4", marker_line_color="#10446b", marker_line_width=1))
+        fig_oct_comp.add_trace(go.Bar(x=oct_df_B["nominal_hz"].map(format_frequency), y=oct_df_B["level_db_spl"], name="File B", marker_color="#E61A25", marker_line_color="#B0101A", marker_line_width=1))
+        fig_oct_comp.update_layout(title="1/3 Oktav Spektrumu (A vs B)", barmode='group', height=500, bargap=0.1, xaxis_type='category', xaxis_tickangle=-45)
+        st.plotly_chart(fig_oct_comp, use_container_width=True)
+        report_data["figures"]["1/3 Octave"] = fig_oct_comp
 
-                # 1/3 Octave İşlemleri
-                def get_octave(fw, spec):
-                    t_dbs, t_freqs = [], []
-                    for band in exact_bands:
-                        l = band / (2**(1/6)); u = band * (2**(1/6))
-                        m = (fw >= l) & (fw <= u)
-                        if np.any(m):
-                            t_dbs.append(10 * np.log10(np.sum(10**(spec[m]/10))))
-                            t_freqs.append(band)
-                    df = pd.DataFrame({
-                        "exact_hz": t_freqs,
-                        "Band (Hz)": [f"{f/1000}k" if f>=1000 else str(int(f)) for f in nominal_bands[:len(t_freqs)]],
-                        "SPL (dB)": t_dbs
-                    })
-                    return df
+        st.markdown(t("### 🤖 Akıllı Teşhis", "### 🤖 Auto-Interpretation"))
+        low_mask = (oct_df_A["nominal_hz"] >= 20) & (oct_df_A["nominal_hz"] <= 250)
+        hi_mask = (oct_df_A["nominal_hz"] >= 2000) & (oct_df_A["nominal_hz"] <= 10000)
+        
+        # A Dosyası Teşhisi
+        low_A = 10 * np.log10(np.sum(10 ** (oct_df_A.loc[low_mask, "level_db_spl"] / 10)))
+        hi_A = 10 * np.log10(np.sum(10 ** (oct_df_A.loc[hi_mask, "level_db_spl"] / 10)))
+        if low_A > hi_A + 5: diag_A_tr, diag_A_en = "Düşük frekanslar baskın (Yapısal titreşim / Uğultu).", "Low frequencies dominant (Structural vibration / Rumble)."
+        elif hi_A > low_A + 5: diag_A_tr, diag_A_en = "Yüksek frekanslar baskın (Sürtünme / Tiz ıslık).", "High frequencies dominant (Friction / High-pitched whistle)."
+        else: diag_A_tr, diag_A_en = "Düşük ve yüksek frekanslar arasında dengeli dağılım.", "Balanced distribution between low and high frequencies."
 
-                third_oct_A = get_octave(fw_A, spec_A)
-                third_oct_B = get_octave(fw_B, spec_B)
-                
-                oct_df_A = third_oct_A[third_oct_A["exact_hz"] <= max_display_frequency].copy()
-                oct_df_B = third_oct_B[third_oct_B["exact_hz"] <= max_display_frequency].copy()
+        # B Dosyası Teşhisi
+        low_B = 10 * np.log10(np.sum(10 ** (oct_df_B.loc[low_mask, "level_db_spl"] / 10)))
+        hi_B = 10 * np.log10(np.sum(10 ** (oct_df_B.loc[hi_mask, "level_db_spl"] / 10)))
+        if low_B > hi_B + 5: diag_B_tr, diag_B_en = "Düşük frekanslar baskın (Yapısal titreşim / Uğultu).", "Low frequencies dominant (Structural vibration / Rumble)."
+        elif hi_B > low_B + 5: diag_B_tr, diag_B_en = "Yüksek frekanslar baskın (Sürtünme / Tiz ıslık).", "High frequencies dominant (Friction / High-pitched whistle)."
+        else: diag_B_tr, diag_B_en = "Düşük ve yüksek frekanslar arasında dengeli dağılım.", "Balanced distribution between low and high frequencies."
 
-            report_data = {"figures": {}, "diagnostics": {}}
-            tab_cm, tab_op, tab_ai, tab_oc = st.tabs(["Color Maps", "Order Plots", "Articulation Index (SII)", "1/3 Octave"])
-            
-            # --- TAB 1: COLOR MAPS (A/B) ---
-            with tab_cm:
-                st.subheader("Acoustic Spectrogram Comparison")
-                c1, c2 = st.columns(2)
-                with c1:
-                    st.markdown(f"**A:** {file_A.name}")
-                    fig_cm_A = go.Figure(data=go.Heatmap(z=Zdb_A, x=tstft_A, y=fstft_A, colorscale='Jet', colorbar=dict(title="Seviye [dB]" if lang=="TR" else "Level [dB]")))
-                    fig_cm_A.update_layout(xaxis_title="Zaman [s]" if lang=="TR" else "Time [s]", yaxis_title="Frekans [Hz]" if lang=="TR" else "Frequency [Hz]", yaxis_type="log", height=400, margin=dict(l=40, r=40, t=20, b=40))
-                    st.plotly_chart(fig_cm_A, use_container_width=True)
-                with c2:
-                    st.markdown(f"**B:** {file_B.name}")
-                    fig_cm_B = go.Figure(data=go.Heatmap(z=Zdb_B, x=tstft_B, y=fstft_B, colorscale='Jet', colorbar=dict(title="Seviye [dB]" if lang=="TR" else "Level [dB]")))
-                    fig_cm_B.update_layout(xaxis_title="Zaman [s]" if lang=="TR" else "Time [s]", yaxis_title="Frekans [Hz]" if lang=="TR" else "Frequency [Hz]", yaxis_type="log", height=400, margin=dict(l=40, r=40, t=20, b=40))
-                    st.plotly_chart(fig_cm_B, use_container_width=True)
-                
-                # Spectrogram Akıllı Teşhis Kıyaslaması
-                avg_A = np.mean(Zdb_A)
-                avg_B = np.mean(Zdb_B)
-                diff = avg_B - avg_A
-                
-                diag_A = f"Ortalama enerji: {avg_A:.1f} dB." if lang=="TR" else f"Average energy: {avg_A:.1f} dB."
-                diag_B = f"Ortalama enerji: {avg_B:.1f} dB." if lang=="TR" else f"Average energy: {avg_B:.1f} dB."
-                
-                if diff > 3:
-                    diag_diff = f"B dosyasinda genel spektral gurultu ortalama +{diff:.1f} dB artmistir." if lang=="TR" else f"Overall spectral noise in file B increased by +{diff:.1f} dB."
-                elif diff < -3:
-                    diag_diff = f"B dosyasinda genel spektral gurultu {abs(diff):.1f} dB azalmistir." if lang=="TR" else f"Overall spectral noise in file B decreased by {abs(diff):.1f} dB."
-                else:
-                    diag_diff = "Iki dosyanin genel spektral enerji dagilimlari benzerdir." if lang=="TR" else "The overall spectral energy distributions are similar."
+        # Karşılaştırma Teşhisi
+        diff_low = low_B - low_A
+        diff_hi = hi_B - hi_A
 
-                st.info(f"🟦 **A ({file_A.name}):** {diag_A}\n\n🟥 **B ({file_B.name}):** {diag_B}\n\n⚖️ **{'Kıyaslama' if lang=='TR' else 'Comparison'}:** {diag_diff}")
+        if diff_hi > 3 and diff_hi > diff_low:
+            diag_comp_tr = "Test dosyasında (B), yüksek frekanslarda (sürtünme/ıslık) referansa (A) göre ciddi artış var."
+            diag_comp_en = "In the test file (B), there is a significant increase in high frequencies (friction/whistle) compared to the reference (A)."
+        elif diff_low > 3 and diff_low > diff_hi:
+            diag_comp_tr = "Test dosyasında (B), düşük frekanslarda (uğultu/titreşim) referansa (A) göre ciddi artış var."
+            diag_comp_en = "In the test file (B), there is a significant increase in low frequencies (rumble/vibration) compared to the reference (A)."
+        else:
+            diag_comp_tr = "Frekans bantlarındaki genel enerji değişimleri orantılı veya birbirine yakındır."
+            diag_comp_en = "The overall energy changes in the frequency bands are proportional or close to each other."
 
-                report_data["figures"]["Color Map (A - Ref)"] = fig_cm_A
-                report_data["figures"]["Color Map (B - Test)"] = fig_cm_B
-                report_data["diagnostics"]["Color Map"] = {"A": diag_A, "B": diag_B, "Diff": diag_diff}
+        final_diag_text = (
+            f"🟦 **A ({uploaded_files[0].name}):** {t(diag_A_tr, diag_A_en)}\n\n"
+            f"🟥 **B ({uploaded_files[1].name}):** {t(diag_B_tr, diag_B_en)}\n\n"
+            f"⚖️ **{t('KARŞILAŞTIRMA', 'COMPARISON')}:** {t(diag_comp_tr, diag_comp_en)}"
+        )
 
-            # --- TAB 2: ORDER PLOTS (A/B) ---
-            with tab_op:
-                st.subheader("Order Plots (A/B Overlay)")
-                ord_A = fw_A / (rpm_fixed_A / 60.0)
-                ord_B = fw_B / (rpm_fixed_B / 60.0)
-                
-                fig_op = go.Figure()
-                fig_op.add_trace(go.Scatter(x=ord_A, y=spec_A, mode='lines', name=f'A: {file_A.name}', line=dict(color='#1f77b4', width=2)))
-                fig_op.add_trace(go.Scatter(x=ord_B, y=spec_B, mode='lines', name=f'B: {file_B.name}', line=dict(color='#d62728', width=2)))
-                fig_op.update_layout(xaxis_title="Order", yaxis_title="Amplitude (dB)", xaxis=dict(range=[0, 10]), height=450, margin=dict(l=40, r=40, t=20, b=40), legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
-                st.plotly_chart(fig_op, use_container_width=True)
-                
-                peak_A = ord_A[np.argmax(spec_A)]
-                peak_B = ord_B[np.argmax(spec_B)]
-                
-                diag_A = "Ana saft balanssizligi" if 0.8 < peak_A < 1.2 else "Kaplin/saft eksen kacikligi" if 1.8 < peak_A < 2.2 else f"Baskin mertebe: {peak_A:.1f}x"
-                diag_B = "Ana saft balanssizligi" if 0.8 < peak_B < 1.2 else "Kaplin/saft eksen kacikligi" if 1.8 < peak_B < 2.2 else f"Baskin mertebe: {peak_B:.1f}x"
-                if lang == "EN":
-                    diag_A = "Main shaft unbalance" if 0.8 < peak_A < 1.2 else "Coupling/shaft misalignment" if 1.8 < peak_A < 2.2 else f"Dominant order: {peak_A:.1f}x"
-                    diag_B = "Main shaft unbalance" if 0.8 < peak_B < 1.2 else "Coupling/shaft misalignment" if 1.8 < peak_B < 2.2 else f"Dominant order: {peak_B:.1f}x"
-                
-                diff_val = np.max(spec_B) - np.max(spec_A)
-                if diff_val > 0:
-                    diag_diff = f"B kaydindaki mekanik titresim (pik noktasi) {diff_val:.1f} dB daha sidetlidir." if lang=="TR" else f"Mechanical vibration (peak) in file B is {diff_val:.1f} dB higher."
-                else:
-                    diag_diff = f"B kaydindaki mekanik titresim {abs(diff_val):.1f} dB daha zayiftir." if lang=="TR" else f"Mechanical vibration in file B is {abs(diff_val):.1f} dB lower."
+        st.info(final_diag_text)
+        
+        report_data["diagnostics"]["1/3 Octave"] = [
+            (f"A ({uploaded_files[0].name})", t(diag_A_tr, diag_A_en)),
+            (f"B ({uploaded_files[1].name})", t(diag_B_tr, diag_B_en)),
+            (t("KARŞILAŞTIRMA", "COMPARISON"), t(diag_comp_tr, diag_comp_en))
+        ]
 
-                st.info(f"🟦 **A ({file_A.name}):** {diag_A}\n\n🟥 **B ({file_B.name}):** {diag_B}\n\n⚖️ **{'Kıyaslama' if lang=='TR' else 'Comparison'}:** {diag_diff}")
+    if PDF_ENABLED:
+        st.sidebar.markdown("---")
+        if st.sidebar.button(t("📄 PDF Raporu Hazırla", "📄 Prepare PDF Report"), use_container_width=True):
+            pdf_info_dialog(report_data)
 
-                report_data["figures"]["Order Plot"] = fig_op
-                report_data["diagnostics"]["Order Plot"] = {"A": diag_A, "B": diag_B, "Diff": diag_diff}
-
-            # --- TAB 3: SII (A/B) ---
-            with tab_ai:
-                st.subheader("SII Analysis (A vs B)")
-                sii_val_A, sii_contrib_A = calculate_sii(fw_A, spec_A)
-                sii_val_B, sii_contrib_B = calculate_sii(fw_B, spec_B)
-                
-                fig_sii = make_subplots(rows=1, cols=2, specs=[[{'type': 'indicator'}, {'type': 'indicator'}]], subplot_titles=(file_A.name, file_B.name))
-                
-                fig_sii.add_trace(go.Indicator(mode="gauge+number", value=sii_val_A, gauge={'axis': {'range': [0, 100]}, 'bar': {'color': "darkgray"}, 'steps': [{'range': [0, 45], 'color': "lightpink"}, {'range': [45, 75], 'color': "palegoldenrod"}, {'range': [75, 100], 'color': "lightgreen"}]}), row=1, col=1)
-                fig_sii.add_trace(go.Indicator(mode="gauge+number", value=sii_val_B, gauge={'axis': {'range': [0, 100]}, 'bar': {'color': "darkgray"}, 'steps': [{'range': [0, 45], 'color': "lightpink"}, {'range': [45, 75], 'color': "palegoldenrod"}, {'range': [75, 100], 'color': "lightgreen"}]}), row=1, col=2)
-                
-                fig_sii.update_layout(height=320, margin=dict(t=40, b=20))
-                st.plotly_chart(fig_sii, use_container_width=True)
-                
-                # SII Çubuk Karşılaştırması
-                b_str = [f"{b/1000}k" if b>=1000 else str(b) for b in sii_bands]
-                c_A = [sii_contrib_A[b] for b in sii_bands]
-                c_B = [sii_contrib_B[b] for b in sii_bands]
-                
-                fig_cb = go.Figure()
-                fig_cb.add_trace(go.Bar(x=b_str, y=c_A, name='File A', marker_color='#1f77b4', marker_line_color='#003366', marker_line_width=1))
-                fig_cb.add_trace(go.Bar(x=b_str, y=c_B, name='File B', marker_color='#d62728', marker_line_color='#8B0000', marker_line_width=1))
-                fig_cb.update_layout(title="SII Katkısı (A vs B)" if lang=="TR" else "SII Contributions (A vs B)", xaxis_type='category', barmode='group', height=280, margin=dict(t=40, b=20))
-                st.plotly_chart(fig_cb, use_container_width=True)
-
-                diag_A = generate_sii_diagnosis(sii_val_A, lang)
-                diag_B = generate_sii_diagnosis(sii_val_B, lang)
-                
-                diff_sii = sii_val_B - sii_val_A
-                if diff_sii > 5:
-                    diag_diff = f"B dosyasinda makine gurultusu azalmis ve iletisim ortami %{diff_sii:.1f} iyilesmis." if lang=="TR" else f"Machine noise decreased in file B, communication environment improved by {diff_sii:.1f}%."
-                elif diff_sii < -5:
-                    diag_diff = f"B dosyasinda gurultu artisi iletisimi %{abs(diff_sii):.1f} daha kotulestirmis." if lang=="TR" else f"Noise increase in file B worsened communication by {abs(diff_sii):.1f}%."
-                else:
-                    diag_diff = "Iki durum arasinda belirgin bir iletisim (ergonomi) farki yoktur." if lang=="TR" else "No significant communication (ergonomic) difference between the two states."
-
-                st.info(f"🟦 **A ({file_A.name}) [SII: %{sii_val_A:.1f}]:** {diag_A}\n\n🟥 **B ({file_B.name}) [SII: %{sii_val_B:.1f}]:** {diag_B}\n\n⚖️ **{'Kıyaslama' if lang=='TR' else 'Comparison'}:** {diag_diff}")
-
-                report_data["figures"]["SII Gauge"] = fig_sii
-                report_data["figures"]["SII Bands"] = fig_cb
-                report_data["diagnostics"]["SII Gauge"] = {"A": diag_A, "B": diag_B, "Diff": diag_diff}
-
-            # --- TAB 4: 1/3 OCTAVE (A/B) ---
-            with tab_oc:
-                st.subheader("1/3 Octave Band Spectrum (A vs B)")
-                fig_oc = go.Figure()
-                fig_oc.add_trace(go.Bar(x=oct_df_A["Band (Hz)"], y=oct_df_A["SPL (dB)"], name='File A', marker_color='#1f77b4', marker_line_color='#003366', marker_line_width=1))
-                fig_oc.add_trace(go.Bar(x=oct_df_B["Band (Hz)"], y=oct_df_B["SPL (dB)"], name='File B', marker_color='#d62728', marker_line_color='#8B0000', marker_line_width=1))
-                fig_oc.update_layout(xaxis_title="Frequency Band (Hz)", yaxis_title="SPL (dB)", xaxis_type='category', barmode='group', height=450, margin=dict(l=40, r=40, t=20, b=40))
-                st.plotly_chart(fig_oc, use_container_width=True)
-                
-                max_A = oct_df_A.loc[oct_df_A["SPL (dB)"].idxmax(), "Band (Hz)"]
-                max_B = oct_df_B.loc[oct_df_B["SPL (dB)"].idxmax(), "Band (Hz)"]
-                
-                diag_A = f"{max_A} Hz bandinda enerji yogunlasmasi." if lang=="TR" else f"Energy concentration at {max_A} Hz band."
-                diag_B = f"{max_B} Hz bandinda enerji yogunlasmasi." if lang=="TR" else f"Energy concentration at {max_B} Hz band."
-                diag_diff = f"Referans {max_A} Hz'den {max_B} Hz frekansina kayma/degisim gozlemlendi." if max_A != max_B else "Baskin oktav bandi her iki durumda da aynidir."
-                if lang == "EN":
-                    diag_diff = f"Shift observed from reference {max_A} Hz to {max_B} Hz." if max_A != max_B else "Dominant octave band is identical in both states."
-
-                st.info(f"🟦 **A ({file_A.name}):** {diag_A}\n\n🟥 **B ({file_B.name}):** {diag_B}\n\n⚖️ **{'Kıyaslama' if lang=='TR' else 'Comparison'}:** {diag_diff}")
-
-                report_data["figures"]["1/3 Octave"] = fig_oc
-                report_data["diagnostics"]["1/3 Octave"] = {"A": diag_A, "B": diag_B, "Diff": diag_diff}
-
-            # Rapor Oluşturma Formu (Karşılaştırma Modu)
-            st.markdown("---")
-            st.header("📄 PDF Raporu Oluştur (Generate Report)")
-            with st.form("antet_form_cmp"):
-                col1, col2 = st.columns(2)
-                with col1:
-                    report_no = st.text_input("Report-No.:", "E4119 CMP")
-                    customer = st.text_input("Customer:", "Gates Internal")
-                    project = st.text_input("Project:", "A/B Comparison")
-                with col2:
-                    sample_no = st.text_input("Sample No.:", "Sample-A vs B")
-                    material = st.text_input("Material:", "EPDM Belt")
-                    technician = st.text_input("Technician:", "Test Lab. Eng.")
-                    test_date = st.date_input("Date:")
-                
-                submit_btn = st.form_submit_button("Raporu Hazırla" if lang=="TR" else "Generate Report")
-                
-                if submit_btn:
-                    antet_data = {
-                        "report_no": report_no, "customer": customer, "project": project,
-                        "technician": technician, "sample_no": sample_no, "material": material,
-                        "test_date": str(test_date)
-                    }
-                    pdf_path = build_pdf_report(report_data, antet_data)
-                    with open(pdf_path, "rb") as f:
-                        st.download_button("📥 PDF İndir (Download PDF)", data=f, file_name=f"NVH_Compare_{report_no}.pdf", mime="application/pdf")
+        if st.session_state.get("pdf_ready", False) and "pdf_bytes" in st.session_state:
+            st.sidebar.download_button(label=t("📥 PDF Raporunu İndir", "📥 Download PDF Report"), data=st.session_state["pdf_bytes"], file_name="Gates_NVH_Comparative_Report.pdf", mime="application/pdf", use_container_width=True, type="primary")
