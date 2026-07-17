@@ -140,12 +140,54 @@ def clean_text_for_fpdf(txt):
     txt = txt.replace("**", "") 
     return txt.encode('latin-1', 'ignore').decode('latin-1')
 
+if PDF_ENABLED:
+    class GatesPDF(FPDF):
+        def __init__(self, antet_data=None, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self.antet_data = antet_data
+
+        def header(self):
+            # Sadece 1. sayfadan sonraki sayfalarda bu basit anteti göster
+            if self.page_no() > 1 and self.antet_data:
+                # Kırmızı üst şerit
+                self.set_fill_color(200, 0, 0)
+                self.rect(10, 10, 190, 2, 'F')
+                
+                # Logo alanı
+                try:
+                    self.image("gates_logo.png", x=12, y=14, w=35)
+                except:
+                    self.set_font("Arial", 'B', 14)
+                    self.set_xy(12, 20)
+                    self.cell(35, 10, "GATES")
+                    
+                # Ortada Report Yazısı
+                self.set_font("Arial", 'B', 16)
+                self.set_xy(10, 16)
+                self.cell(190, 10, "Report", align='C')
+                
+                # Sağ üstte Report-No
+                self.set_font("Arial", 'B', 10)
+                self.set_xy(10, 14)
+                self.cell(188, 5, clean_text_for_fpdf(f"Report-No.: {self.antet_data.get('report_no', '')}"), align='R')
+                
+                # Gri desenli alt çizgi
+                self.set_fill_color(240, 240, 240)
+                self.rect(10, 28, 190, 3, 'F')
+                
+                # İçerik için aşağıya kaydır
+                self.ln(25)
+
 def build_pdf_report(report_data, antet_data=None):
-    pdf = FPDF()
+    if not PDF_ENABLED:
+        return b""
+        
+    pdf = GatesPDF(antet_data=antet_data)
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()
     
     if antet_data:
+        # 1. SAYFA DETAYLI ANTET (Sadece ilk sayfada çalışır)
         # Kırmızı üst şerit
         pdf.set_fill_color(200, 0, 0)
         pdf.rect(10, 10, 190, 2, 'F')
@@ -220,7 +262,7 @@ def build_pdf_report(report_data, antet_data=None):
         
         # Çizgi kalınlığını normale döndür
         pdf.set_line_width(0.2)
-        pdf.ln(15) # Sonraki içerik için boşluk
+        pdf.set_xy(10, 95) # Sonraki içerik için imleci konumlandır
     else:
         pdf.set_font("Arial", 'B', 16)
         pdf.cell(0, 10, clean_text_for_fpdf("Gates R&D NVH Analysis Report"), ln=True, align='C')
@@ -237,13 +279,21 @@ def build_pdf_report(report_data, antet_data=None):
     
     for section in ["Color Map", "Order Plot", "SII (Gauge)", "SII (Bands)", "1/3 Octave"]:
         if section in report_data["figures"]:
-            pdf.add_page()
+            # İlk sayfanın dolmasını beklemeden, eğer "Test Parameters" sonrası yeterli yer yoksa yeni sayfa aç,
+            # Genellikle grafikler büyük olduğu için her birini ayrı sayfaya koymak daha garantilidir.
+            # İlk grafik için zaten ilk sayfadayız, sadece yer kontrolü yapıyoruz.
+            
+            # Gauge grafiği küçük olduğu için yeni sayfaya geçmeyebilir, ama diğerleri için geçelim.
+            if section != "SII (Gauge)" or pdf.get_y() > 150: 
+                pdf.add_page()
+                
             pdf.set_font("Arial", 'B', 14)
             pdf.cell(0, 10, clean_text_for_fpdf(section), ln=True)
             
             fig = report_data["figures"][section]
             with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp_img:
                 fig.write_image(tmp_img.name, format="png", engine="kaleido", width=800, height=450)
+                # Resmin nerede çizileceğini ve genişliğini belirle
                 pdf.image(tmp_img.name, x=10, w=190)
                 tmp_img_path = tmp_img.name
             
@@ -251,13 +301,15 @@ def build_pdf_report(report_data, antet_data=None):
             pdf.ln(5)
             
             # Yorumlamayı (Teşhis) ekle
-            diag_key = section.replace(" (Gauge)", "").replace(" (Bands)", "") # Gauge ve Bands aynı teşhisi kullanır
-            if diag_key in report_data["diagnostics"]:
+            diag_key = section.replace(" (Gauge)", "").replace(" (Bands)", "")
+            if diag_key in report_data["diagnostics"] and section != "SII (Gauge)": # Gauge altına teşhis yazma, Bands altına yazsın
                 pdf.set_font("Arial", '', 11)
                 diag_text = "Diagnosis / Teshis: " + report_data["diagnostics"][diag_key]
                 pdf.multi_cell(0, 6, clean_text_for_fpdf(diag_text))
                 pdf.ln(10)
-    
+            elif diag_key == "SII" and section == "SII (Gauge)":
+                 pdf.ln(5) # Sadece biraz boşluk bırak
+                 
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_pdf:
         pdf.output(tmp_pdf.name)
         with open(tmp_pdf.name, "rb") as f:
