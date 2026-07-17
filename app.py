@@ -887,6 +887,8 @@ elif st.session_state.app_mode == "compare":
         calib_B, _ = calculate_calibration_offset(psd_f_B, psd_B, test_spl, min(20000.0, nyq_B))
         third_oct_B = third_octave_levels(psd_f_B, psd_B, calib_B, nyq_B)
 
+        max_display_frequency = min(20000.0, nyq_A, nyq_B)
+
     st.success(t("✅ Karşılaştırmalı Analiz Tamamlandı!", "✅ Comparative Analysis Complete!"))
 
     report_data = {
