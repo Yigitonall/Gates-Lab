@@ -260,34 +260,67 @@ if PDF_ENABLED:
         pdf.cell(0, 8, clean_text_for_fpdf(f"RPM Info: {report_data['rpm_info']}"), ln=True)
         pdf.ln(5)
         
-        sections = ["Color Map", "Order Plot", "SII Gauge", "SII Bands", "1/3 Octave"]
+        # Grafik Çizim Döngüsü
+        sections = ["Color Map", "Order Plot", "SII", "1/3 Octave"]
         
         for section in sections:
-            if section in report_data["figures"]:
-                if section != "Color Map":
+            # ---------------- SII ÖZEL YAPISI (AYNI SAYFADA 2 GRAFİK) ----------------
+            if section == "SII":
+                if "SII Gauge" in report_data["figures"] and "SII Bands" in report_data["figures"]:
                     pdf.add_page()
-                pdf.set_font("Arial", 'B', 14)
-                # İsimleri temizle (Gauge/Bands eklentisini gizle)
-                display_name = section.replace(" Gauge", "").replace(" Bands", "")
-                pdf.cell(0, 10, clean_text_for_fpdf(display_name), ln=True)
-                
-                fig = report_data["figures"][section]
-                with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp_img:
-                    time.sleep(0.5) # Plotly/Kaleido'nun resmi tam çizmesi için pay
-                    fig.write_image(tmp_img.name, format="png", engine="kaleido", width=800, height=450)
-                    pdf.image(tmp_img.name, x=10, w=190)
-                    tmp_img_path = tmp_img.name
-                
-                os.remove(tmp_img_path)
-                pdf.ln(5)
-                
-                diag_key = display_name
-                # SII Gauge sayfasında değil, SII Bands sayfasında metni yaz
-                if diag_key in report_data["diagnostics"] and section != "SII Gauge":
-                    pdf.set_font("Arial", '', 11)
-                    diag_text = "Diagnosis / Teshis: " + report_data["diagnostics"][diag_key]
-                    pdf.multi_cell(0, 6, clean_text_for_fpdf(diag_text))
+                    pdf.set_font("Arial", 'B', 14)
+                    pdf.cell(0, 10, clean_text_for_fpdf("Articulation Index / SII"), ln=True)
+                    
+                    # 1. Gauge Grafiği
+                    fig_gauge = report_data["figures"]["SII Gauge"]
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp_img:
+                        time.sleep(0.5) 
+                        fig_gauge.write_image(tmp_img.name, format="png", engine="kaleido", width=800, height=320)
+                        pdf.image(tmp_img.name, x=25, w=160) # Ortalıyoruz (210 - 160)/2 = 25
+                        tmp_img_path1 = tmp_img.name
+                    os.remove(tmp_img_path1)
+                    
+                    # 2. Bands Grafiği
+                    fig_bands = report_data["figures"]["SII Bands"]
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp_img:
+                        time.sleep(0.5)
+                        fig_bands.write_image(tmp_img.name, format="png", engine="kaleido", width=800, height=350)
+                        pdf.image(tmp_img.name, x=25, w=160)
+                        tmp_img_path2 = tmp_img.name
+                    os.remove(tmp_img_path2)
+                    
                     pdf.ln(5)
+                    
+                    # 3. Teşhis Metni
+                    if "SII" in report_data["diagnostics"]:
+                        pdf.set_font("Arial", '', 11)
+                        diag_text = "Diagnosis / Teshis: " + report_data["diagnostics"]["SII"]
+                        pdf.multi_cell(0, 6, clean_text_for_fpdf(diag_text))
+                        pdf.ln(5)
+            
+            # ---------------- STANDART GRAFİKLER (TEK SAYFA TEK GRAFİK) ----------------
+            else:
+                if section in report_data["figures"]:
+                    if section != "Color Map":
+                        pdf.add_page()
+                    pdf.set_font("Arial", 'B', 14)
+                    pdf.cell(0, 10, clean_text_for_fpdf(section), ln=True)
+                    
+                    fig = report_data["figures"][section]
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp_img:
+                        time.sleep(0.5)
+                        fig.write_image(tmp_img.name, format="png", engine="kaleido", width=800, height=450)
+                        pdf.image(tmp_img.name, x=10, w=190)
+                        tmp_img_path = tmp_img.name
+                    
+                    os.remove(tmp_img_path)
+                    pdf.ln(5)
+                    
+                    if section in report_data["diagnostics"]:
+                        pdf.set_font("Arial", '', 11)
+                        diag_text = "Diagnosis / Teshis: " + report_data["diagnostics"][section]
+                        pdf.multi_cell(0, 6, clean_text_for_fpdf(diag_text))
+                        pdf.ln(5)
         
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_pdf:
             pdf.output(tmp_pdf.name)
