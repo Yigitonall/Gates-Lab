@@ -87,20 +87,31 @@ if st.session_state.app_mode is None:
         </style>
         """, unsafe_allow_html=True)
 
-    # Yazı ve butonları beyaz alana hizalayan ve kaydırmayı kapatan CSS
+    # Yazı ve butonları ekranın ALTINA iten KESİN ÇÖZÜM
     st.markdown("""
     <style>
+    /* Ana menüdeyken scroll olmasını tamamen engelle */
     body, html, [data-testid="stAppViewContainer"] {
         overflow: hidden !important;
     }
-    .landing-title { text-align: center; color: #252525 !important; font-size: 3rem !important; margin-bottom: 0.5rem; font-weight: bold; white-space: nowrap; }
-    .landing-subtitle { text-align: center; color: #555555; font-size: 1.2rem; margin-bottom: 3rem; }
-    [data-testid="stAppViewContainer"] > .block-container { 
-        padding-top: 75vh !important; 
+    /* Streamlit'in varsayılan tepe boşluğunu (padding) sıfırla ki kontrol bizde olsun */
+    .block-container { 
+        padding-top: 0rem !important; 
         max-width: 1200px !important;
+    }
+    .landing-title { 
+        text-align: center; color: #252525 !important; font-size: 3rem !important; 
+        margin-bottom: 0.5rem; font-weight: bold; white-space: nowrap; 
+    }
+    .landing-subtitle { 
+        text-align: center; color: #555555; font-size: 1.2rem; margin-bottom: 3rem; 
     }
     </style>
     """, unsafe_allow_html=True)
+
+    # İŞTE ÇÖZÜM: Görünmez HTML bloğu. Yüksekliği ekranın %60'ı kadar (60vh).
+    # Bu blok kendinden sonra gelen yazıları ve butonları zorla ekranın alt kısmına (beyaz alana) iter.
+    st.markdown('<div style="height: 60vh;"></div>', unsafe_allow_html=True)
 
     st.markdown('<div class="landing-title">GATES R&D NVH ANALYSIS SYSTEM</div>', unsafe_allow_html=True)
     st.markdown(f'<div class="landing-subtitle">{t("Lütfen yapmak istediğiniz analiz tipini seçin", "Please select the type of analysis you want to perform")}</div>', unsafe_allow_html=True)
@@ -124,7 +135,7 @@ else:
     <style>
     body, html, [data-testid="stAppViewContainer"] { overflow: auto !important; }
     .stApp { background-image: none !important; background-color: #FFFFFF !important; }
-    [data-testid="stAppViewContainer"] > .block-container { padding-top: 2rem !important; max-width: 100% !important; }
+    .block-container { padding-top: 2rem !important; max-width: 100% !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -306,7 +317,7 @@ if PDF_ENABLED:
                 pdf.cell(0, 10, clean_text_for_fpdf(title_text), ln=True)
                 
                 fig = report_data["figures"][fig_key]
-                img_height = 300 if fig_key == "SII Gauge" else 400
+                img_height = 320 if fig_key == "SII Gauge" else 400
                 
                 with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp_img:
                     time.sleep(0.5) 
@@ -320,7 +331,7 @@ if PDF_ENABLED:
                     fig2 = report_data["figures"]["SII Bands"]
                     with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp_img2:
                         time.sleep(0.5)
-                        fig2.write_image(tmp_img2.name, format="png", engine="kaleido", width=800, height=260, scale=4)
+                        fig2.write_image(tmp_img2.name, format="png", engine="kaleido", width=800, height=280, scale=4)
                         pdf.image(tmp_img2.name, x=10, w=190)
                         tmp_img_path2 = tmp_img2.name
                     os.remove(tmp_img_path2)
@@ -973,7 +984,6 @@ elif st.session_state.app_mode == "compare":
 
     tab_color, tab_order, tab_ai, tab_octave = st.tabs(["🌈 COLOR MAPS", "🏎️ ORDER PLOTS (A vs B)", "🧠 SII (A vs B)", "🎼 1/3 OCTAVE (A vs B)"])
 
-    # --- COLOR MAPS ---
     with tab_color:
         stft_size_A = choose_segment_size(sig_A.size, 4096)
         sf_A, st_A, spsd_A = spectrogram(sig_A, fs=sr_A, window="hann", nperseg=stft_size_A, noverlap=int(stft_size_A * 0.75), mode="psd")
@@ -1054,7 +1064,6 @@ elif st.session_state.app_mode == "compare":
             (t("KARŞILAŞTIRMA", "COMPARISON"), t(diag_comp_tr, diag_comp_en))
         ]
 
-    # --- ORDER PLOTS ---
     with tab_order:
         rot_hz = float(fixed_rpm) / 60.0
         max_ord = st.slider(t("Gösterilecek maksimum order", "Maximum order to display"), 1.0, 10.0, 5.0, 0.5)
@@ -1123,7 +1132,6 @@ elif st.session_state.app_mode == "compare":
                 (t("KARŞILAŞTIRMA", "COMPARISON"), t(diag_comp_tr, diag_comp_en))
             ]
 
-    # --- SII COMP ---
     with tab_ai:
         speech_efforts_map = {
             t("Normal", "Normal"): np.array([34.75, 34.27, 25.01, 17.32, 9.33, 1.13]),
@@ -1161,7 +1169,7 @@ elif st.session_state.app_mode == "compare":
         fig_sii_bands = go.Figure()
         fig_sii_bands.add_trace(go.Bar(x=[format_frequency(v) for v in sii_df_A["frequency_hz"]], y=100.0 * sii_df_A["contribution"], name="File A", marker_color="#1f77b4", marker_line_color="#10446b", marker_line_width=1))
         fig_sii_bands.add_trace(go.Bar(x=[format_frequency(v) for v in sii_df_B["frequency_hz"]], y=100.0 * sii_df_B["contribution"], name="File B", marker_color="#E61A25", marker_line_color="#B0101A", marker_line_width=1))
-        fig_sii_bands.update_layout(title="SII Katkısı (A vs B)", barmode='group', height=350, bargap=0.1, xaxis_type='category')
+        fig_sii_bands.update_layout(title="SII Katkısı (A vs B)" if lang=="TR" else "SII Contributions (A vs B)", barmode='group', height=350, bargap=0.1, xaxis_type='category')
         st.plotly_chart(fig_sii_bands, use_container_width=True)
         report_data["figures"]["SII Bands"] = fig_sii_bands
 
@@ -1202,7 +1210,6 @@ elif st.session_state.app_mode == "compare":
             (t("KARŞILAŞTIRMA", "COMPARISON"), t(diag_comp_tr, diag_comp_en))
         ]
 
-    # --- OCTAVE COMP ---
     with tab_octave:
         oct_df_A = third_oct_A[third_oct_A["exact_hz"] <= max_display_frequency].copy()
         oct_df_B = third_oct_B[third_oct_B["exact_hz"] <= max_display_frequency].copy()
