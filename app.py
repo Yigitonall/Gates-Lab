@@ -266,7 +266,6 @@ if PDF_ENABLED:
             ("Color Map (A - Referans)", "Color Map A"), 
             ("Color Map (B - Test)", "Color Map B"),
             ("Order Plot", "Order Plot"), 
-            ("SII Bands", "1/3 Octave"), 
             ("SII Gauge", "SII"), 
             ("1/3 Octave", "1/3 Octave")
         ]
@@ -289,7 +288,7 @@ if PDF_ENABLED:
                 
                 os.remove(tmp_img_path)
                 
-                # Compare modunda bands grafiğini SII Gauge ile aynı sayfaya koyalım
+                # Band grafiğini SII Gauge ile aynı sayfaya koyalım
                 if fig_key == "SII Gauge" and "SII Bands" in report_data["figures"]:
                     fig2 = report_data["figures"]["SII Bands"]
                     with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp_img2:
@@ -298,9 +297,6 @@ if PDF_ENABLED:
                         pdf.image(tmp_img2.name, x=10, w=190)
                         tmp_img_path2 = tmp_img2.name
                     os.remove(tmp_img_path2)
-                
-                if fig_key == "SII Bands":
-                    continue # SII Gauge'in altında basıldığı için atlıyoruz
                 
                 pdf.ln(5)
                 
