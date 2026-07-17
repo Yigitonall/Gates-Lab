@@ -27,23 +27,61 @@ st.set_page_config(
     layout="wide",
 )
 
-# CSS Enjeksiyonu
+# CSS Enjeksiyonu: navigates.gates.com Tasarım Dili
 st.markdown("""
 <style>
-    .stApp { background-color: #FFFFFF; color: #212529; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; }
-    [data-testid="stSidebar"] { background-color: #F0F0F0; border-right: 1px solid #C8C8C8; }
-    [data-testid="stSidebar"] * { color: #212529; }
-    h1, h2, h3, h4 { color: #141412 !important; font-weight: 700 !important; }
-    .stTabs [data-baseweb="tab-list"] { border-bottom: 2px solid #E0E0E0; }
-    .stTabs [aria-selected="true"] { border-bottom-color: #E61A25 !important; border-bottom-width: 3px !important; }
-    .stTabs [aria-selected="true"] p { color: #E61A25 !important; font-weight: bold; }
-    div[data-testid="stFileUploader"] > section { border-color: #C8C8C8; background-color: #F9F9F9; }
-    div[data-testid="stAlert"] { background-color: #F0F0F0; color: #212529; border-left: 5px solid #E61A25; }
+    /* Genel Arka Plan ve Ana Metin Rengi */
+    .stApp {
+        background-color: #FFFFFF;
+        color: #212529;
+        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    }
+    
+    /* Yan Menü (Sidebar) Teması - Açık Gri */
+    [data-testid="stSidebar"] {
+        background-color: #F0F0F0;
+        border-right: 1px solid #C8C8C8;
+    }
+    [data-testid="stSidebar"] * {
+        color: #212529;
+    }
+    
+    /* Ana Başlıklar - Koyu Antrasit */
+    h1, h2, h3, h4 {
+        color: #141412 !important;
+        font-weight: 700 !important;
+    }
+    
+    /* Sekmeler (Tabs) Teması - Seçili Sekme Gates Kırmızısı */
+    .stTabs [data-baseweb="tab-list"] {
+        border-bottom: 2px solid #E0E0E0;
+    }
+    .stTabs [aria-selected="true"] {
+        border-bottom-color: #E61A25 !important;
+        border-bottom-width: 3px !important;
+    }
+    .stTabs [aria-selected="true"] p {
+        color: #E61A25 !important;
+        font-weight: bold;
+    }
+    
+    /* Yükleme Butonları ve Etkileşimli Alanlar */
+    div[data-testid="stFileUploader"] > section {
+        border-color: #C8C8C8;
+        background-color: #F9F9F9;
+    }
+    
+    /* Uyarı ve Bilgi Kutuları */
+    div[data-testid="stAlert"] {
+        background-color: #F0F0F0;
+        color: #212529;
+        border-left: 5px solid #E61A25;
+    }
 </style>
 """, unsafe_allow_html=True)
 
 # ============================================================
-# DİL SEÇİMİ VE ÇEVİRİ MOTORU
+# DİL SEÇİMİ VE ÇEVİRİ MOTORU (BILINGUAL SUPPORT)
 # ============================================================
 try:
     st.sidebar.image("gates_logo.png", use_container_width=True)
@@ -54,10 +92,13 @@ lang_choice = st.sidebar.radio("🌐 Language / Dil", ["Türkçe", "English"], h
 lang = "tr" if lang_choice == "Türkçe" else "en"
 
 def t(tr_text: str, en_text: str) -> str:
+    """Seçili dile göre metni döndüren çeviri fonksiyonu."""
     return tr_text if lang == "tr" else en_text
 
 st.title(t("🔊 Gürültü ve Akustik Analiz Sistemi (NVH)", "🔊 Noise and Acoustic Analysis System (NVH)"))
-st.caption("COLOR MAPS • ORDER PLOTS • ARTICULATION INDEX / SII • 1/3 OCTAVE BAND PLOTS")
+st.caption(
+    "COLOR MAPS • ORDER PLOTS • ARTICULATION INDEX / SII • 1/3 OCTAVE BAND PLOTS"
+)
 
 # ============================================================
 # AKIŞ KONTROLÜ (SESSION STATE)
@@ -86,33 +127,27 @@ SII_NORMAL_SPEECH = np.array([34.75, 34.27, 25.01, 17.32, 9.33, 1.13], dtype=flo
 # PDF İÇİN YARDIMCI FONKSİYONLAR
 # ============================================================
 def clean_text_for_fpdf(txt):
-    """FPDF'in çökmemesi için Türkçe karakterleri, emojileri ve markdown'ı temizler."""
     if not isinstance(txt, str): return str(txt)
     tr_map = {'ç':'c', 'ğ':'g', 'ı':'i', 'ö':'o', 'ş':'s', 'ü':'u', 'Ç':'C', 'Ğ':'G', 'İ':'I', 'Ö':'O', 'Ş':'S', 'Ü':'U'}
-    for tr, eng in tr_map.items():
-        txt = txt.replace(tr, eng)
-    txt = txt.replace("**", "") # Markdown bold temizliği
+    for tr, eng in tr_map.items(): txt = txt.replace(tr, eng)
+    txt = txt.replace("**", "") 
     return txt.encode('latin-1', 'ignore').decode('latin-1')
 
 def build_pdf_report(report_data):
-    """Verilen datalardan grafikli PDF oluşturur."""
     pdf = FPDF()
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()
     
-    # Başlık
     pdf.set_font("Arial", 'B', 16)
     pdf.cell(0, 10, clean_text_for_fpdf("Gates R&D NVH Analysis Report"), ln=True, align='C')
     pdf.ln(10)
     
-    # Genel Parametreler
     pdf.set_font("Arial", '', 12)
     pdf.cell(0, 8, clean_text_for_fpdf(f"Audio File: {report_data['file_name']}"), ln=True)
     pdf.cell(0, 8, clean_text_for_fpdf(f"SPL Calibration (Max Hold): {report_data['max_spl']} dB"), ln=True)
     pdf.cell(0, 8, clean_text_for_fpdf(f"RPM Info: {report_data['rpm_info']}"), ln=True)
     pdf.ln(10)
     
-    # Grafikler ve Yorumlar
     for section in ["Color Map", "Order Plot", "SII", "1/3 Octave"]:
         if section in report_data["figures"]:
             pdf.add_page()
@@ -134,7 +169,6 @@ def build_pdf_report(report_data):
                 pdf.multi_cell(0, 6, clean_text_for_fpdf(diag_text))
                 pdf.ln(10)
     
-    # PDF'i Byte'a Çevir
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_pdf:
         pdf.output(tmp_pdf.name)
         with open(tmp_pdf.name, "rb") as f:
@@ -354,13 +388,14 @@ else:
             st.sidebar.error(t(f"RPM CSV okunamadı: {exc}", f"Failed to read RPM CSV: {exc}"))
 
 st.sidebar.markdown("---")
+
 # ============================================================
 # ANALİZ BUTONU VE PDF OLUŞTURMA BUTONU
 # ============================================================
 if st.sidebar.button(t("🚀 Analiz Yap", "🚀 Run Analysis"), type="primary", use_container_width=True):
     if uploaded_audio is not None:
         st.session_state.analyze = True
-        st.session_state.pdf_ready = False # Yeni analiz yapıldığında eski PDF resetlenir
+        st.session_state.pdf_ready = False
     else:
         st.sidebar.error(t("Lütfen önce bir WAV dosyası yükleyin!", "Please upload a WAV file first!"))
 
@@ -416,9 +451,14 @@ with tab_color:
     frequency_mask = (spec_f >= 20.0) & (spec_f <= max_display_frequency)
 
     fig_color = go.Figure(go.Heatmap(x=spec_t, y=spec_f[frequency_mask], z=spec_level_db[frequency_mask, :], colorscale="Turbo", zmin=reference_leq_db - 80.0, zmax=reference_leq_db + 5.0, colorbar={"title": t("Seviye<br>[dB]", "Level<br>[dB]")}))
-    fig_color.update_layout(title=t("Kalibre Edilmiş Akustik Spektrogram (Logaritmik Ölçek)", "Calibrated Acoustic Spectrogram (Logarithmic Scale)"), xaxis_title=t("Zaman [s]", "Time [s]"), yaxis_title=t("Frekans [Hz]", "Frequency [Hz]"), yaxis_type="log", height=620)
+    fig_color.update_layout(
+        title=t("Kalibre Edilmiş Akustik Spektrogram (Logaritmik Ölçek)", "Calibrated Acoustic Spectrogram (Logarithmic Scale)"),
+        xaxis_title=t("Zaman [s]", "Time [s]"), yaxis_title=t("Frekans [Hz]", "Frequency [Hz]"), yaxis_type="log",
+        height=620, margin=dict(l=40, r=30, t=60, b=40),
+        plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
+        font=dict(color='#212529', family="Arial, sans-serif")
+    )
     st.plotly_chart(fig_color, use_container_width=True)
-
     report_data["figures"]["Color Map"] = fig_color
 
     st.markdown("### 🤖 Akıllı Teşhis (Auto-Interpretation)")
@@ -457,7 +497,15 @@ with tab_order:
                 harmonic_text.append(f"{so:g}×")
 
         if harmonic_x: fig_order.add_trace(go.Scatter(x=harmonic_x, y=harmonic_y, mode="markers+text", text=harmonic_text, textposition="top center", marker={"size": 10, "color": "#212529"}))
-        fig_order.update_layout(title=f"{t('Order Spektrumu', 'Order Spectrum')} — {float(fixed_rpm):.0f} RPM", xaxis_title=t("Mertebe / Order", "Order"), yaxis_title=t("dB SPL", "dB SPL"), height=560)
+        fig_order.update_layout(
+            title=f"{t('Order Spektrumu', 'Order Spectrum')} — {float(fixed_rpm):.0f} RPM",
+            xaxis_title=t("Mertebe / Order [× dönme frekansı]", "Order [× rotation frequency]"), 
+            yaxis_title=t("Bant seviyesi [dB SPL]", "Band level [dB SPL]"),
+            height=560, hovermode="x unified", margin=dict(l=40, r=30, t=70, b=45),
+            plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
+            font=dict(color='#212529', family="Arial, sans-serif"),
+            xaxis=dict(showgrid=True, gridcolor='#E0E0E0'), yaxis=dict(showgrid=True, gridcolor='#E0E0E0')
+        )
         st.plotly_chart(fig_order, use_container_width=True)
         report_data["figures"]["Order Plot"] = fig_order
 
@@ -487,7 +535,14 @@ with tab_order:
             for so in selected_orders:
                 col = f"order_{so:g}"
                 if col in binned_tracks.columns: fig_tracking.add_trace(go.Scatter(x=binned_tracks["rpm"], y=binned_tracks[col], mode="lines+markers", name=f"{so:g}× Order"))
-            fig_tracking.update_layout(title=t("Order Tracking — RPM'e Göre Mertebe Seviyeleri", "Order Tracking"), xaxis_title="RPM", yaxis_title="dB SPL", height=580)
+            fig_tracking.update_layout(
+                title=t("Order Tracking — RPM'e Göre Mertebe Seviyeleri", "Order Tracking"),
+                xaxis_title="RPM", yaxis_title="dB SPL",
+                height=580, hovermode="x unified",
+                plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
+                font=dict(color='#212529', family="Arial, sans-serif"),
+                xaxis=dict(showgrid=True, gridcolor='#E0E0E0'), yaxis=dict(showgrid=True, gridcolor='#E0E0E0')
+            )
             st.plotly_chart(fig_tracking, use_container_width=True)
             report_data["figures"]["Order Plot"] = fig_tracking
 
@@ -495,13 +550,39 @@ with tab_order:
 # TAB 3 — ARTICULATION INDEX / SII
 # ============================================================
 with tab_ai:
-    speech_efforts_map = {t("Normal", "Normal"): np.array([34.75, 34.27, 25.01, 17.32, 9.33, 1.13])}
+    speech_efforts_map = {
+        t("Normal", "Normal"): np.array([34.75, 34.27, 25.01, 17.32, 9.33, 1.13]),
+        t("Yükseltilmiş", "Raised"): np.array([38.98, 40.15, 33.86, 25.32, 16.78, 5.07]),
+        t("Yüksek", "Loud"): np.array([41.55, 44.85, 42.16, 34.39, 25.41, 11.39]),
+        t("Bağırma", "Shout"): np.array([42.50, 49.24, 51.31, 44.32, 34.41, 20.72]),
+    }
+    
+    vocal_effort = st.selectbox(t("Standart konuşma eforu", "Standard vocal effort"), list(speech_efforts_map.keys()), index=0)
     octave_noise_levels = octave_band_levels(psd_frequencies, psd, calibration_offset_db, SII_OCTAVE_FREQS)
-    sii_table = compute_octave_sii(octave_noise_levels, speech_efforts_map[t("Normal", "Normal")])
+    sii_table = compute_octave_sii(octave_noise_levels, speech_efforts_map[vocal_effort])
     sii_percent = float(sii_table["contribution"].sum()) * 100.0
 
+    fig_sii = go.Figure(go.Indicator(
+        mode="gauge+number", value=sii_percent, number={"suffix": " %", "valueformat": ".1f", "font": {"color": "#212529"}},
+        title={"text": "Octave-band SII / %AI", "font": {"color": "#212529"}},
+        gauge={
+            "axis": {"range": [0, 100], "tickcolor": "#212529"},
+            "steps": [{"range": [0, 30], "color": "#F0F0F0"}, {"range": [30, 70], "color": "#C8C8C8"}, {"range": [70, 100], "color": "#848484"}],
+            "bar": {"color": "#E61A25"},
+        }
+    ))
+    fig_sii.update_layout(height=430, paper_bgcolor='rgba(0,0,0,0)', font=dict(family="Arial, sans-serif"))
+    st.plotly_chart(fig_sii, use_container_width=True)
+
     fig_contribution = go.Figure(go.Bar(x=[format_frequency(v) for v in sii_table["frequency_hz"]], y=100.0 * sii_table["contribution"], marker_color="#E61A25"))
-    fig_contribution.update_layout(title=t(f"SII Katkısı (Toplam: %{sii_percent:.1f})", f"SII Contribution (Total: {sii_percent:.1f}%)"), height=430)
+    fig_contribution.update_layout(
+        title=t("Frekans Bantlarının SII Katkısı", "SII Contribution by Frequency Band"),
+        xaxis_title=t("Oktav merkez frekansı [Hz]", "Octave center frequency [Hz]"),
+        yaxis_title=t("SII katkısı [yüzde puan]", "SII contribution [percentage points]"),
+        height=430, bargap=0.12, plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
+        font=dict(color='#212529', family="Arial, sans-serif"),
+        xaxis=dict(showgrid=False), yaxis=dict(showgrid=True, gridcolor='#E0E0E0')
+    )
     st.plotly_chart(fig_contribution, use_container_width=True)
     report_data["figures"]["SII"] = fig_contribution
 
@@ -521,7 +602,17 @@ with tab_octave:
     octave_plot_df["label"] = octave_plot_df["nominal_hz"].map(format_frequency)
 
     fig_octave = go.Figure(go.Bar(x=octave_plot_df["label"], y=octave_plot_df["level_db_spl"], marker_color="#E61A25"))
-    fig_octave.update_layout(title=t("1/3 Oktav Bant Spektrumu", "1/3 Octave Band Spectrum"), height=560)
+    fig_octave.update_layout(
+        title=t("IEC 61260-1 Mantığıyla 1/3 Oktav Bant Spektrumu", "1/3 Octave Band Spectrum (IEC 61260-1)"),
+        xaxis_title=t("Nominal merkez frekansı [Hz]", "Nominal center frequency [Hz]"), 
+        yaxis_title=t("Bant ses basınç seviyesi [dB SPL]", "Band sound pressure level [dB SPL]"),
+        height=560, bargap=0.08,
+        xaxis={"type": "category", "categoryorder": "array", "categoryarray": octave_plot_df["label"].tolist(), "tickangle": -45, "showgrid": False},
+        yaxis=dict(showgrid=True, gridcolor='#E0E0E0'),
+        margin=dict(l=40, r=30, t=70, b=90),
+        plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
+        font=dict(color='#212529', family="Arial, sans-serif")
+    )
     st.plotly_chart(fig_octave, use_container_width=True)
     report_data["figures"]["1/3 Octave"] = fig_octave
 
@@ -542,6 +633,17 @@ with tab_octave:
     st.info(t(f"📊 **Enerji Dağılımı:** Düşük Frekans Toplamı: {low_db_total:.1f} dB | Yüksek Frekans Toplamı: {high_db_total:.1f} dB\n\n🔍 **Teşhis:** {diag_tr}", f"🔍 **Diagnosis:** {diag_tr}"))
     report_data["diagnostics"]["1/3 Octave"] = diag_tr
 
+    with st.expander(t("1/3 oktav sonuç tablosu", "1/3 octave result table")):
+        df_display = octave_plot_df[["nominal_hz", "exact_hz", "lower_hz", "upper_hz", "level_db_spl"]].round(3).copy()
+        df_display.columns = [
+            t("Nominal merkez [Hz]", "Nominal center [Hz]"),
+            t("Exact merkez [Hz]", "Exact center [Hz]"),
+            t("Alt sınır [Hz]", "Lower limit [Hz]"),
+            t("Üst sınır [Hz]", "Upper limit [Hz]"),
+            t("Bant seviyesi [dB SPL]", "Band level [dB SPL]")
+        ]
+        st.dataframe(df_display, use_container_width=True)
+
 # ============================================================
 # PDF RAPORLAMA ARAYÜZÜ (SOL MENÜ ALT KISIM)
 # ============================================================
@@ -554,7 +656,7 @@ if PDF_ENABLED:
                 st.session_state["pdf_bytes"] = pdf_bytes
                 st.session_state.pdf_ready = True
             except Exception as e:
-                st.sidebar.error(f"PDF Oluşturma Hatası: {e}\n\nLütfen terminalinizde 'pip install fpdf kaleido' kütüphanelerinin yüklü olduğundan emin olun.")
+                st.sidebar.error(f"PDF Oluşturma Hatası: {e}\n\nLütfen terminalinizde 'pip install fpdf2 kaleido' kütüphanelerinin yüklü olduğundan emin olun.")
 
     if st.session_state.get("pdf_ready", False) and "pdf_bytes" in st.session_state:
         st.sidebar.download_button(
@@ -567,5 +669,5 @@ if PDF_ENABLED:
         )
 else:
     st.sidebar.markdown("---")
-    st.sidebar.warning(t("PDF Raporu alabilmek için terminalde şu komutu çalıştırın: \n\npip install fpdf kaleido", 
-                         "To generate PDF reports, run this command in your terminal: \n\npip install fpdf kaleido"))
+    st.sidebar.warning(t("PDF Raporu alabilmek için terminalde şu komutu çalıştırın: \n\npip install fpdf2 kaleido==0.2.1", 
+                         "To generate PDF reports, run this command in your terminal: \n\npip install fpdf2 kaleido==0.2.1"))
