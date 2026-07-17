@@ -925,6 +925,38 @@ elif st.session_state.app_mode == "compare":
             fig_cmap_B.update_layout(title=t(f"Dosya B: {uploaded_files[1].name}", f"File B: {uploaded_files[1].name}"), yaxis_type="log", height=450)
             st.plotly_chart(fig_cmap_B, use_container_width=True)
             report_data["figures"]["Color Map (B - Test)"] = fig_cmap_B
+            
+        st.markdown(t("### 🤖 Akıllı Teşhis", "### 🤖 Auto-Interpretation"))
+        db_matrix_A = slvl_A[mask_A, :]
+        db_matrix_B = slvl_B[mask_B, :]
+        
+        mean_db_A = np.mean(db_matrix_A)
+        mean_db_B = np.mean(db_matrix_B)
+        diff_mean = mean_db_B - mean_db_A
+        
+        time_var_B = np.var(np.mean(db_matrix_B, axis=0))
+        freq_var_B = np.var(np.mean(db_matrix_B, axis=1))
+
+        if diff_mean > 3:
+            if time_var_B > freq_var_B * 1.5:
+                diag_tr = f"B dosyasının genel enerjisinde artış (+{diff_mean:.1f} dB) ve zamana bağlı ani vuruntular (dikey izler) gözlemlendi. Kök Neden: Mekanik çarpma veya darbe."
+                diag_en = f"An increase in overall energy (+{diff_mean:.1f} dB) and sudden time-dependent knocks (vertical traces) observed in File B. Root Cause: Mechanical clashing or impact."
+            elif freq_var_B > time_var_B * 1.5:
+                diag_tr = f"B dosyasında (+{diff_mean:.1f} dB) enerji artışı ve belirli frekanslarda yoğunlaşma (yatay bantlar) tespit edildi. Kök Neden: Sürekli sürtünme veya harmonik inilti."
+                diag_en = f"Energy increase (+{diff_mean:.1f} dB) and concentration in specific frequencies (horizontal bands) detected in File B. Root Cause: Continuous friction or harmonic whine."
+            else:
+                diag_tr = f"B dosyasında A'ya göre geniş bantlı bir gürültü enerjisi artışı (+{diff_mean:.1f} dB) tespit edildi."
+                diag_en = f"A broadband noise energy increase (+{diff_mean:.1f} dB) was detected in File B compared to A."
+        elif diff_mean < -3:
+            diag_tr = f"B dosyasında A'ya göre genel gürültü enerjisinde iyileşme (düşüş) ({diff_mean:.1f} dB) tespit edildi."
+            diag_en = f"An improvement (decrease) in overall noise energy ({diff_mean:.1f} dB) was detected in File B compared to A."
+        else:
+            diag_tr = "Her iki dosyanın spektrogram (zaman-frekans) enerji dağılımları büyük ölçüde benzerdir."
+            diag_en = "The spectrogram (time-frequency) energy distributions of both files are largely similar."
+
+        st.info(t(f"💡 **Bulgu:** İki dosya arasındaki ortalama spektral enerji farkı: {diff_mean:+.1f} dB.\n\n🔍 **Kıyaslama Teşhisi:** {diag_tr}", 
+                  f"💡 **Finding:** The average spectral energy difference between the two files: {diff_mean:+.1f} dB.\n\n🔍 **Comparative Diagnosis:** {diag_en}"))
+        report_data["diagnostics"]["Color Map B"] = t(diag_tr, diag_en)
 
     # --- ORDER PLOTS ---
     with tab_order:
