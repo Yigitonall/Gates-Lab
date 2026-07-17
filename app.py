@@ -129,15 +129,15 @@ if PDF_ENABLED:
                 self.set_y(35)
                 
         def footer(self):
-            # Alt kısımdan 20mm yukarıya konumlan
-            self.set_y(-20)
+            # Alt kısımdan 26mm yukarıya konumlan (Kutu yüksekliğini 16mm yapacağımız için pay bırakıyoruz)
+            self.set_y(-26)
             self.set_font("Arial", "", 8)
             self.set_line_width(0.5)
             
             box_x = 10
             box_y = self.get_y()
             box_w = 190
-            box_h = 10
+            box_h = 16 # <-- Kutu Yüksekliği 10'dan 16'ya Çıkarıldı (Taşmayı Önlemek İçin)
             
             # Ana çerçeve ve dikey bölücü çizgi
             self.rect(box_x, box_y, box_w, box_h)
@@ -147,7 +147,12 @@ if PDF_ENABLED:
             valid_text = "This document was created electronically and is valid without signature."
             
             # Sol Taraf: Dosya konumu ve geçerlilik
-            self.set_xy(box_x, box_y + 1)
+            # Uzun yolları dikeyde otomatik ortalamak için matematiksel satır hesabı
+            line_count = 1 + max(1, math.ceil(len(path_text) / 110))
+            text_height = line_count * 4
+            y_offset = max(1, (box_h - text_height) / 2)
+            
+            self.set_xy(box_x, box_y + y_offset)
             self.multi_cell(160, 4, f"{path_text}\n{valid_text}", align='C')
             
             # Sağ Taraf: Sayfa numarası
@@ -157,7 +162,7 @@ if PDF_ENABLED:
     def build_pdf_report(report_data, antet_data):
         pdf = GatesReport(antet_data)
         pdf.alias_nb_pages()
-        pdf.set_auto_page_break(auto=True, margin=25)
+        pdf.set_auto_page_break(auto=True, margin=30) # <-- Alt marjin 25'ten 30'a çıkarıldı (Footer çakışmasını engellemek için)
         pdf.add_page()
         
         # --- İLK SAYFA ANTETİ (YENİDEN BOYUTLANDIRILMIŞ) ---
