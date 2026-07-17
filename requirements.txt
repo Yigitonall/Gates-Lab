@@ -1,6 +1,7 @@
 streamlit
-plotly
 numpy
-scipy
 pandas
-
+scipy
+plotly
+fpdf2
+kaleido==0.2.1
