@@ -205,40 +205,51 @@ if PDF_ENABLED:
         
         # Tarih ve Lokasyon Bloğu (H: 8mm)
         pdf.rect(10, 52, 100, 8)
+        pdf.line(42, 52, 42, 60) # Date dikey ayırıcı çizgi
+        
         pdf.rect(110, 52, 90, 8)
+        pdf.line(138, 52, 138, 60) # Location dikey ayırıcı çizgi
+        
         pdf.set_font("Arial", '', 10)
         pdf.set_xy(12, 53)
-        pdf.cell(20, 6, "Date:")
-        pdf.set_xy(35, 53)
-        pdf.cell(70, 6, clean_text_for_fpdf(antet_data.get('date', '')))
+        pdf.cell(28, 6, "Date:")
+        pdf.set_xy(44, 53)
+        pdf.cell(64, 6, clean_text_for_fpdf(antet_data.get('date', '')))
+        
         pdf.set_xy(112, 53)
-        pdf.cell(20, 6, "Location:")
-        pdf.set_xy(135, 53)
-        pdf.cell(60, 6, clean_text_for_fpdf(antet_data.get('location', '')))
+        pdf.cell(24, 6, "Location:")
+        pdf.set_xy(140, 53)
+        pdf.cell(58, 6, clean_text_for_fpdf(antet_data.get('location', '')))
         
         # Yazar (Author) ve Departman Bloğu (H: 16mm - Çok satırlılar için genişletildi)
         pdf.rect(10, 60, 100, 16)
+        pdf.line(42, 60, 42, 76) # Author dikey ayırıcı çizgi
+        
         pdf.rect(110, 60, 90, 16)
+        pdf.line(138, 60, 138, 76) # Department dikey ayırıcı çizgi
+        
         pdf.set_xy(12, 62)
-        pdf.cell(20, 5, "Author:")
+        pdf.cell(28, 5, "Author:")
         pdf.set_font("Arial", '', 9)
-        pdf.set_xy(35, 62)
-        pdf.multi_cell(70, 4, clean_text_for_fpdf(antet_data.get('author', '')))
+        pdf.set_xy(44, 62)
+        pdf.multi_cell(64, 4, clean_text_for_fpdf(antet_data.get('author', '')))
         
         pdf.set_font("Arial", '', 10)
         pdf.set_xy(112, 62)
-        pdf.cell(25, 5, "Department:")
+        pdf.cell(24, 5, "Department:")
         pdf.set_font("Arial", '', 9)
-        pdf.set_xy(137, 62)
-        pdf.multi_cell(60, 4, clean_text_for_fpdf(antet_data.get('department', '')))
+        pdf.set_xy(140, 62)
+        pdf.multi_cell(58, 4, clean_text_for_fpdf(antet_data.get('department', '')))
         
         # Dağıtım Listesi Bloğu (H: 10mm)
         pdf.rect(10, 76, 190, 10)
+        pdf.line(42, 76, 42, 86) # Distribution list dikey ayırıcı çizgi
+        
         pdf.set_font("Arial", '', 10)
         pdf.set_xy(12, 78)
-        pdf.cell(30, 6, "Distribution list:")
-        pdf.set_xy(45, 78)
-        pdf.cell(150, 6, clean_text_for_fpdf(antet_data.get('distribution', '')))
+        pdf.cell(28, 6, "Distribution list:")
+        pdf.set_xy(44, 78)
+        pdf.cell(145, 6, clean_text_for_fpdf(antet_data.get('distribution', '')))
         
         # Ana içerik başlangıcı (Aşağı itildi)
         pdf.set_y(95)
