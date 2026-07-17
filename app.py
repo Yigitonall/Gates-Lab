@@ -94,6 +94,17 @@ st.caption(
 )
 
 # ============================================================
+# AKIŞ KONTROLÜ (SESSION STATE)
+# ============================================================
+# Kullanıcı parametreleri değiştirdiğinde analiz ekranını sıfırlamak için
+if "analyze" not in st.session_state:
+    st.session_state.analyze = False
+
+def reset_analysis():
+    """Sol menüde herhangi bir girdi değiştiğinde grafikleri gizler."""
+    st.session_state.analyze = False
+
+# ============================================================
 # AKUSTİK STANDARTLAR VE SABİTLER
 # ============================================================
 EPS = np.finfo(float).tiny
@@ -294,24 +305,26 @@ def bin_tracks_by_rpm(rpm_values: np.ndarray, tracks: dict[float, np.ndarray], r
 # ============================================================
 st.sidebar.header(t("📁 Veri Girişi ve Ayarlar", "📁 Data Entry & Settings"))
 
-uploaded_audio = st.sidebar.file_uploader(t("1. WAV ses dosyası", "1. WAV audio file"), type=["wav"])
+# Herhangi bir girdi değiştiğinde reset_analysis tetiklenir ve grafikler gizlenir.
+uploaded_audio = st.sidebar.file_uploader(t("1. WAV ses dosyası", "1. WAV audio file"), type=["wav"], on_change=reset_analysis)
 
 st.sidebar.subheader(t("🎚️ SPL Kalibrasyonu (MAX HOLD)", "🎚️ SPL Calibration (MAX HOLD)"))
 reference_leq_db = st.sidebar.number_input(
     t("Maksimum Pik Seviyesi (MAX SPL) [dB]", "Maximum Peak Level (MAX SPL) [dB]"),
     min_value=20.0, max_value=140.0, value=80.0, step=0.1,
-    help=t("Voltcraft cihazından okuduğunuz tepe (peak) desibel değerini girin.", "Enter the peak decibel value read from the Voltcraft device.")
+    help=t("Voltcraft cihazından okuduğunuz tepe (peak) desibel değerini girin.", "Enter the peak decibel value read from the Voltcraft device."),
+    on_change=reset_analysis
 )
 
 st.sidebar.subheader(t("🏎️ RPM Bilgisi", "🏎️ RPM Information"))
-rpm_mode = st.sidebar.radio(t("RPM tipi", "RPM Type"), [t("Sabit RPM", "Fixed RPM"), t("Değişken RPM (CSV)", "Variable RPM (CSV)")])
+rpm_mode = st.sidebar.radio(t("RPM tipi", "RPM Type"), [t("Sabit RPM", "Fixed RPM"), t("Değişken RPM (CSV)", "Variable RPM (CSV)")], on_change=reset_analysis)
 
 fixed_rpm, rpm_dataframe, rpm_column, time_column = None, None, None, None
 
 if rpm_mode in ["Sabit RPM", "Fixed RPM"]:
-    fixed_rpm = st.sidebar.number_input(t("Sabit dönüş hızı [RPM]", "Fixed rotation speed [RPM]"), min_value=1.0, value=1500.0, step=10.0)
+    fixed_rpm = st.sidebar.number_input(t("Sabit dönüş hızı [RPM]", "Fixed rotation speed [RPM]"), min_value=1.0, value=1500.0, step=10.0, on_change=reset_analysis)
 else:
-    uploaded_rpm = st.sidebar.file_uploader(t("RPM zaman serisi (.csv)", "RPM time series (.csv)"), type=["csv"])
+    uploaded_rpm = st.sidebar.file_uploader(t("RPM zaman serisi (.csv)", "RPM time series (.csv)"), type=["csv"], on_change=reset_analysis)
     if uploaded_rpm is not None:
         try:
             uploaded_rpm.seek(0)
@@ -319,23 +332,41 @@ else:
             columns = list(rpm_dataframe.columns)
             if not columns: raise ValueError(t("CSV dosyasında sütun bulunamadı.", "No columns found in CSV."))
             rpm_guess = next((c for c in columns if any(k in c.lower() for k in ["rpm", "devir", "speed"])), columns[-1])
-            rpm_column = st.sidebar.selectbox(t("RPM sütunu", "RPM column"), columns, index=columns.index(rpm_guess))
+            rpm_column = st.sidebar.selectbox(t("RPM sütunu", "RPM column"), columns, index=columns.index(rpm_guess), on_change=reset_analysis)
             
             time_dist_opt = t("<Kayıt süresine eşit dağıt>", "<Distribute evenly over recording time>")
             time_options = [time_dist_opt] + columns
             time_guess = next((c for c in columns if any(k in c.lower() for k in ["time", "zaman", "sec"])), None)
             default_time_index = time_options.index(time_guess) if time_guess in time_options else 0
-            selected_time = st.sidebar.selectbox(t("Zaman sütunu", "Time column"), time_options, index=default_time_index)
+            selected_time = st.sidebar.selectbox(t("Zaman sütunu", "Time column"), time_options, index=default_time_index, on_change=reset_analysis)
             time_column = None if selected_time == time_dist_opt else selected_time
             st.sidebar.success(t("RPM CSV dosyası okundu.", "RPM CSV successfully read."))
         except Exception as exc:
             st.sidebar.error(t(f"RPM CSV okunamadı: {exc}", f"Failed to read RPM CSV: {exc}"))
 
+st.sidebar.markdown("---")
+# ============================================================
+# ANALİZ YAP BUTONU
+# ============================================================
+if st.sidebar.button(t("🚀 Analiz Yap", "🚀 Run Analysis"), type="primary", use_container_width=True):
+    if uploaded_audio is not None:
+        st.session_state.analyze = True
+    else:
+        st.sidebar.error(t("Lütfen önce bir WAV dosyası yükleyin!", "Please upload a WAV file first!"))
+
 # ============================================================
 # ANA AKIŞ VE HESAPLAMALAR
 # ============================================================
+# Eğer dosya yüklenmediyse uyar ve durdur
 if uploaded_audio is None:
-    st.info(t("ℹ️ Lütfen sol panelden bir **.wav** ses dosyası yükleyin.", "ℹ️ Please upload a **.wav** audio file from the left panel."))
+    st.info(t("ℹ️ Lütfen sol panelden bir **.wav** ses dosyası yükleyin, parametreleri girin ve 'Analiz Yap' butonuna tıklayın.", 
+              "ℹ️ Please upload a **.wav** audio file from the left panel, set parameters, and click 'Run Analysis'."))
+    st.stop()
+
+# Dosya yüklü ama 'Analiz Yap' butonuna henüz basılmadıysa uyar ve durdur
+if not st.session_state.analyze:
+    st.info(t("👈 Ayarlarınızı tamamladıktan sonra sol menünün en altındaki **'Analiz Yap'** butonuna tıklayın.", 
+              "👈 After setting your parameters, click the **'Run Analysis'** button at the bottom of the left menu."))
     st.stop()
 
 with st.spinner(t("Akustik veriler işleniyor... Lütfen bekleyiniz.", "Processing acoustic data... Please wait.")):
@@ -412,12 +443,9 @@ with tab_color:
         # --- COLOR MAPS OTOMATİK YORUMLAMA (SMART DIAGNOSTICS) ---
         st.markdown("### 🤖 Akıllı Teşhis (Auto-Interpretation)")
         try:
-            # Sadece analiz edilen frekans aralığındaki dB matrisini al
             db_matrix = spec_level_db[frequency_mask, :]
             
-            # Zamana göre dalgalanma (Dikey İzler - Vuruntu/Darbe analizi)
             time_variance = np.var(np.mean(db_matrix, axis=0))
-            # Frekansa göre odaklanma (Yatay İzler - Harmonik/Sürekli inilti analizi)
             freq_variance = np.var(np.mean(db_matrix, axis=1))
 
             if time_variance > freq_variance * 1.5: 
