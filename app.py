@@ -1162,13 +1162,7 @@ elif st.session_state.app_mode == "compare":
         )
 
         st.info(final_diag_text)
-        
-        # PDF için tablo yapısında veri kaydedelim
-        report_data["diagnostics"]["1/3 Octave"] = [
-            (f"A ({uploaded_files[0].name})", t(diag_A_tr, diag_A_en)),
-            (f"B ({uploaded_files[1].name})", t(diag_B_tr, diag_B_en)),
-            (t("KARŞILAŞTIRMA", "COMPARISON"), t(diag_comp_tr, diag_comp_en))
-        ]
+        report_data["diagnostics"]["1/3 Octave"] = final_diag_text
 
     if PDF_ENABLED:
         st.sidebar.markdown("---")
