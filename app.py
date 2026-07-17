@@ -96,7 +96,7 @@ if st.session_state.app_mode is None:
     .landing-title { text-align: center; color: #252525 !important; font-size: 3rem !important; margin-bottom: 0.5rem; font-weight: bold; white-space: nowrap; }
     .landing-subtitle { text-align: center; color: #555555; font-size: 1.2rem; margin-bottom: 3rem; }
     [data-testid="stAppViewContainer"] > .block-container { 
-        padding-top: 66vh !important; 
+        padding-top: 75vh !important; 
         max-width: 1200px !important;
     }
     </style>
@@ -1071,6 +1071,7 @@ elif st.session_state.app_mode == "compare":
 
         st.markdown(t("### 🤖 Akıllı Teşhis", "### 🤖 Auto-Interpretation"))
         if not ord_df_A.empty and not ord_df_B.empty:
+            # A Dosyası Teşhisi
             max_idx_A = ord_df_A["level_db_spl"].idxmax()
             ord_A_dom = ord_df_A.loc[max_idx_A, "order"]
             if abs(ord_A_dom - 1.0) < 0.1:
@@ -1082,6 +1083,7 @@ elif st.session_state.app_mode == "compare":
             else:
                 diag_A_tr, diag_A_en = f"{ord_A_dom}x (Tam Sayı) baskın. Spesifik parçaları inceleyin.", f"{ord_A_dom}x (Integer) dominant. Investigate specific parts."
 
+            # B Dosyası Teşhisi
             max_idx_B = ord_df_B["level_db_spl"].idxmax()
             ord_B_dom = ord_df_B.loc[max_idx_B, "order"]
             if abs(ord_B_dom - 1.0) < 0.1:
@@ -1093,6 +1095,7 @@ elif st.session_state.app_mode == "compare":
             else:
                 diag_B_tr, diag_B_en = f"{ord_B_dom}x (Tam Sayı) baskın. Spesifik parçaları inceleyin.", f"{ord_B_dom}x (Integer) dominant. Investigate specific parts."
 
+            # Karşılaştırma Teşhisi
             val_A = ord_df_A.loc[max_idx_B, "level_db_spl"] 
             val_B = ord_df_B.loc[max_idx_B, "level_db_spl"]
             diff = val_B - val_A
@@ -1164,14 +1167,17 @@ elif st.session_state.app_mode == "compare":
 
         st.markdown(t("### 🤖 Akıllı Teşhis", "### 🤖 Auto-Interpretation"))
         
+        # A Dosyası Teşhisi
         if sii_pct_A >= 75: diag_A_tr, diag_A_en = "%100 güvenli ve konforlu iletişim bölgesi.", "100% safe and comfortable communication zone."
         elif sii_pct_A >= 45: diag_A_tr, diag_A_en = "İletişim kısmen maskeleniyor.", "Communication is partially masked."
         else: diag_A_tr, diag_A_en = "İletişim tamamen yutuluyor (İzolasyon zorunlu).", "Communication is completely swallowed (Insulation mandatory)."
         
+        # B Dosyası Teşhisi
         if sii_pct_B >= 75: diag_B_tr, diag_B_en = "%100 güvenli ve konforlu iletişim bölgesi.", "100% safe and comfortable communication zone."
         elif sii_pct_B >= 45: diag_B_tr, diag_B_en = "İletişim kısmen maskeleniyor.", "Communication is partially masked."
         else: diag_B_tr, diag_B_en = "İletişim tamamen yutuluyor (İzolasyon zorunlu).", "Communication is completely swallowed (Insulation mandatory)."
 
+        # Karşılaştırma Teşhisi
         diff_sii = sii_pct_B - sii_pct_A
         if diff_sii < -10:
             diag_comp_tr = f"B dosyasında makine gürültüsü, A'ya göre iletişimi %{abs(diff_sii):.1f} daha fazla engelliyor."
@@ -1212,18 +1218,21 @@ elif st.session_state.app_mode == "compare":
         low_mask = (oct_df_A["nominal_hz"] >= 20) & (oct_df_A["nominal_hz"] <= 250)
         hi_mask = (oct_df_A["nominal_hz"] >= 2000) & (oct_df_A["nominal_hz"] <= 10000)
         
+        # A Dosyası Teşhisi
         low_A = 10 * np.log10(np.sum(10 ** (oct_df_A.loc[low_mask, "level_db_spl"] / 10)))
         hi_A = 10 * np.log10(np.sum(10 ** (oct_df_A.loc[hi_mask, "level_db_spl"] / 10)))
         if low_A > hi_A + 5: diag_A_tr, diag_A_en = "Düşük frekanslar baskın (Yapısal titreşim / Uğultu).", "Low frequencies dominant (Structural vibration / Rumble)."
         elif hi_A > low_A + 5: diag_A_tr, diag_A_en = "Yüksek frekanslar baskın (Sürtünme / Tiz ıslık).", "High frequencies dominant (Friction / High-pitched whistle)."
         else: diag_A_tr, diag_A_en = "Düşük ve yüksek frekanslar arasında dengeli dağılım.", "Balanced distribution between low and high frequencies."
 
+        # B Dosyası Teşhisi
         low_B = 10 * np.log10(np.sum(10 ** (oct_df_B.loc[low_mask, "level_db_spl"] / 10)))
         hi_B = 10 * np.log10(np.sum(10 ** (oct_df_B.loc[hi_mask, "level_db_spl"] / 10)))
         if low_B > hi_B + 5: diag_B_tr, diag_B_en = "Düşük frekanslar baskın (Yapısal titreşim / Uğultu).", "Low frequencies dominant (Structural vibration / Rumble)."
         elif hi_B > low_B + 5: diag_B_tr, diag_B_en = "Yüksek frekanslar baskın (Sürtünme / Tiz ıslık).", "High frequencies dominant (Friction / High-pitched whistle)."
         else: diag_B_tr, diag_B_en = "Düşük ve yüksek frekanslar arasında dengeli dağılım.", "Balanced distribution between low and high frequencies."
 
+        # Karşılaştırma Teşhisi
         diff_low = low_B - low_A
         diff_hi = hi_B - hi_A
 
