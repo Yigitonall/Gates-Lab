@@ -111,12 +111,16 @@ if st.session_state.app_mode is None:
     .landing-subtitle { 
         text-align: center; color: #555555; font-size: 1.2rem; margin-bottom: 3rem; 
     }
-    /* Ana menüdeki dil seçimi butonunu ortala */
+    /* Ana menüdeki dil seçimi butonunu yatayda tam ortala */
+    div[data-testid="stRadio"] > div[role="radiogroup"] {
+        justify-content: center;
+        margin: 0 auto;
+    }
     div[data-testid="stRadio"] {
         display: flex;
         justify-content: center;
         align-items: center;
-        margin-bottom: 0.5rem;
+        margin-bottom: 1rem;
     }
     </style>
     """, unsafe_allow_html=True)
