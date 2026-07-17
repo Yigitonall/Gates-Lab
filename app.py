@@ -144,7 +144,7 @@ if PDF_ENABLED:
                 self.set_y(35)
 
         def footer(self):
-            # Alt kısımdan yukarıya konumlan
+            # Alt kısımdan yukarıya konumlan (Kutu yüksekliği 16mm yapıldı, taşmalar önlendi)
             self.set_y(-25)
             self.set_font("Arial", "", 8)
             self.set_line_width(0.5)
@@ -186,13 +186,9 @@ if PDF_ENABLED:
         # --- İLK SAYFA ANTETİ ---
         pdf.set_line_width(0.5)
         
-        # Gri alt şerit (Önce çizilir ki siyah çerçeve üstte kalsın ve gri dışarı taşmasın)
+        # Gri alt şerit (Önce çizilir ki siyah çerçeve üstte kalsın)
         pdf.set_fill_color(240, 240, 240)
         pdf.rect(10.25, 36, 189.5, 4, 'F')
-        
-        # Kırmızı üst şerit (Çerçevenin iç kenarına milimetrik hizalandı)
-        pdf.set_fill_color(200, 0, 0)
-        pdf.rect(10.25, 10.25, 189.5, 2, 'F')
         
         # Dış Çerçeve ve Kutular (Çizgiler)
         pdf.rect(10, 10, 190, 30) # Logo ve Rapor Numarası Bloğu (H: 30mm)
@@ -200,6 +196,10 @@ if PDF_ENABLED:
         pdf.rect(10, 54, 190, 10) # Date/Location Bloğu
         pdf.rect(10, 64, 190, 16) # Author/Dept Bloğu
         pdf.rect(10, 80, 190, 10) # Distribution Bloğu
+        
+        # Kırmızı üst şerit (İnce: 2mm, Çerçevenin iç kenarına milimetrik hizalandı)
+        pdf.set_fill_color(200, 0, 0)
+        pdf.rect(10.25, 10.25, 189.5, 2, 'F')
         
         # Dikey Ayırıcı Çizgiler (Seperatörler)
         pdf.line(42, 54, 42, 90)   # Sol etiketlerin (Date, Author, Dist) ayırıcısı
@@ -268,10 +268,10 @@ if PDF_ENABLED:
         # Compare ve Single modlarında basılacak grafik isimleri
         sections = [
             ("Color Map", "Color Map"), 
-            ("Color Map (A - Referans)", "Color Map B"), 
-            ("Color Map (B - Test)", "Color Map B"),
+            ("Color Map (A - Referans)", "NONE"), 
+            ("Color Map (B - Test)", "Color Map (B - Test)"),
             ("Order Plot", "Order Plot"), 
-            ("SII Gauge", "SII"), 
+            ("SII Gauge", "SII Gauge"), 
             ("1/3 Octave", "1/3 Octave")
         ]
 
@@ -293,7 +293,7 @@ if PDF_ENABLED:
                 
                 os.remove(tmp_img_path)
                 
-                # Band grafiğini SII Gauge ile aynı sayfaya koyalım (eğer varsa)
+                # Band grafiğini SII Gauge ile aynı sayfaya koyalım
                 if fig_key == "SII Gauge" and "SII Bands" in report_data["figures"]:
                     fig2 = report_data["figures"]["SII Bands"]
                     with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp_img2:
@@ -323,7 +323,7 @@ if PDF_ENABLED:
                         pdf.set_font("Arial", 'B', 12)
                         pdf.set_fill_color(200, 0, 0)
                         pdf.set_text_color(255, 255, 255)
-                        diag_title = "TEŞHİS / DIAGNOSIS"
+                        diag_title = "TEŞHİS / DIAGNOSIS" if lang == "tr" else "DIAGNOSIS"
                         pdf.cell(190, 8, clean_text_for_fpdf(diag_title), border=1, fill=True, ln=True, align='C')
                         
                         # A ve B Sütun Başlıkları
@@ -385,7 +385,7 @@ if PDF_ENABLED:
                     else:
                         # Tekli mod stili (Düz metin)
                         pdf.set_font("Arial", '', 11)
-                        diag_text = ("Teşhis: " if lang_choice == "Türkçe" else "Diagnosis: ") + str(diag_data)
+                        diag_text = ("Teşhis: " if lang == "tr" else "Diagnosis: ") + str(diag_data)
                         pdf.multi_cell(0, 6, clean_text_for_fpdf(diag_text))
                     
                     pdf.ln(10)
@@ -729,11 +729,11 @@ if st.session_state.app_mode == "single":
         freq_variance = np.var(np.mean(db_matrix, axis=1))
 
         if time_variance > freq_variance * 1.5: 
-            diag_tr = "Spektrogramda zamana bağlı ani enerji değişimleri (Dikey izler) tespit edildi. Muhtemel Kök Neden: **Anlık vuruntular, metal çarpması veya darbe (Impact) gürültüsü**."
-            diag_en = "Sudden time-dependent energy changes (Vertical traces) detected in the spectrogram. Probable Root Cause: **Instantaneous knocks, metal clashing, or impact noise**."
+            diag_tr = "Spektrogramda zamana bağlı ani enerji değişimleri (Dikey izler) tespit edildi. Muhtemel Kök Neden: Anlık vuruntular, metal çarpması veya darbe (Impact) gürültüsü."
+            diag_en = "Sudden time-dependent energy changes (Vertical traces) detected in the spectrogram. Probable Root Cause: Instantaneous knocks, metal clashing, or impact noise."
         elif freq_variance > time_variance * 1.5: 
-            diag_tr = "Spektrogramda belirli frekans bantlarında yoğunlaşma (Yatay bantlar) tespit edildi. Muhtemel Kök Neden: **Dönen parçalardan kaynaklı sürekli inilti, sürtünme veya harmonik gürültü**."
-            diag_en = "Concentration in specific frequency bands (Horizontal bands) detected in the spectrogram. Probable Root Cause: **Continuous whine, friction, or harmonic noise caused by rotating parts**."
+            diag_tr = "Spektrogramda belirli frekans bantlarında yoğunlaşma (Yatay bantlar) tespit edildi. Muhtemel Kök Neden: Dönen parçalardan kaynaklı sürekli inilti, sürtünme veya harmonik gürültü."
+            diag_en = "Concentration in specific frequency bands (Horizontal bands) detected in the spectrogram. Probable Root Cause: Continuous whine, friction, or harmonic noise caused by rotating parts."
         else: 
             diag_tr = "Spektrogramda hem zamana hem de frekansa yayılan karmaşık bir gürültü profili gözlemleniyor. Karmaşık (Geniş bantlı) titreşimler incelenmelidir."
             diag_en = "A complex noise profile spreading across both time and frequency is observed. Complex (Broadband) vibrations should be investigated."
@@ -774,17 +774,17 @@ if st.session_state.app_mode == "single":
                 max_db = harmonic_y[max_idx]
                 
                 if abs(dominant_order - 1.0) < 0.1: 
-                    diag_tr = "Sistemde **1x (1. Mertebe)** seviyesi baskın. Muhtemel Kök Neden: **Ana şaftta Balanssızlık (Unbalance)**."
-                    diag_en = "**1x (1st Order)** level is dominant in the system. Probable Root Cause: **Main shaft Unbalance**."
+                    diag_tr = "Sistemde 1x (1. Mertebe) seviyesi baskın. Muhtemel Kök Neden: Ana şaftta Balanssızlık (Unbalance)."
+                    diag_en = "1x (1st Order) level is dominant in the system. Probable Root Cause: Main shaft Unbalance."
                 elif abs(dominant_order - 2.0) < 0.1: 
-                    diag_tr = "Sistemde **2x (2. Mertebe)** seviyesi baskın. Muhtemel Kök Neden: **Kaplin/Şaft Eksen Kaçıklığı veya Gevşeklik (Misalignment / Looseness)**."
-                    diag_en = "**2x (2nd Order)** level is dominant in the system. Probable Root Cause: **Coupling/Shaft Misalignment or Looseness**."
+                    diag_tr = "Sistemde 2x (2. Mertebe) seviyesi baskın. Muhtemel Kök Neden: Kaplin/Şaft Eksen Kaçıklığı veya Gevşeklik (Misalignment / Looseness)."
+                    diag_en = "2x (2nd Order) level is dominant in the system. Probable Root Cause: Coupling/Shaft Misalignment or Looseness."
                 elif dominant_order % 1 != 0: 
-                    diag_tr = f"Sistemde **{dominant_order}x (Küsuratlı Mertebe)** seviyesi baskın. Muhtemel Kök Neden: **Rulman arızası (Bearing defect) veya Kayış Kayması (Belt Slip)**."
-                    diag_en = f"**{dominant_order}x (Fractional Order)** level is dominant. Probable Root Cause: **Bearing defect or Belt Slip**."
+                    diag_tr = f"Sistemde {dominant_order}x (Küsuratlı Mertebe) seviyesi baskın. Muhtemel Kök Neden: Rulman arızası (Bearing defect) veya Kayış Kayması (Belt Slip)."
+                    diag_en = f"{dominant_order}x (Fractional Order) level is dominant. Probable Root Cause: Bearing defect or Belt Slip."
                 else: 
-                    diag_tr = f"Sistemde **{dominant_order}x (Yüksek Tam Sayı)** seviyesi baskın. Belirli kanat/diş sayısına sahip spesifik parçalar incelenmelidir."
-                    diag_en = f"**{dominant_order}x (High Integer Order)** level is dominant. Specific parts with a matching number of blades/teeth should be investigated."
+                    diag_tr = f"Sistemde {dominant_order}x (Yüksek Tam Sayı) seviyesi baskın. Belirli kanat/diş sayısına sahip spesifik parçalar incelenmelidir."
+                    diag_en = f"{dominant_order}x (High Integer Order) level is dominant. Specific parts with a matching number of blades/teeth should be investigated."
 
                 diag_final = t(diag_tr, diag_en)
                 st.info(t(f"💡 **Bulgu:** En yüksek tepe noktası {max_db:.1f} dB ile {dominant_order}x mertebesinde tespit edildi.\n\n🔍 **Teşhis:** {diag_final}", f"💡 **Finding:** The highest peak was detected at order {dominant_order}x with {max_db:.1f} dB.\n\n🔍 **Diagnosis:** {diag_final}"))
@@ -854,14 +854,14 @@ if st.session_state.app_mode == "single":
 
         st.markdown(t("### 🤖 Akıllı Teşhis", "### 🤖 Auto-Interpretation"))
         if sii_percent >= 75: 
-            diag_tr = "Makine çalışma gürültüsü, insan iletişimini engellemiyor. İş güvenliği açısından **%100 güvenli ve konforlu bölge**."
-            diag_en = "Machine operating noise does not hinder human communication. **100% safe and comfortable zone** in terms of occupational safety."
+            diag_tr = "Makine çalışma gürültüsü, insan iletişimini engellemiyor. İş güvenliği açısından %100 güvenli ve konforlu bölge."
+            diag_en = "Machine operating noise does not hinder human communication. 100% safe and comfortable zone in terms of occupational safety."
         elif sii_percent >= 45: 
-            diag_tr = "Makine gürültüsü konuşmaları kısmen maskeliyor. Etkili iletişim kurmak için personelin **ses yükseltmesi gerekebilir**."
-            diag_en = "Machine noise partially masks conversations. Personnel **may need to raise their voice** to communicate effectively."
+            diag_tr = "Makine gürültüsü konuşmaları kısmen maskeliyor. Etkili iletişim kurmak için personelin ses yükseltmesi gerekebilir."
+            diag_en = "Machine noise partially masks conversations. Personnel may need to raise their voice to communicate effectively."
         else: 
-            diag_tr = "Makine gürültüsü insan sesini tamamen yutuyor. Operatörler için **kulaklık/yalıtım kesinlikle zorunludur**."
-            diag_en = "Machine noise completely swallows the human voice. **Headsets/insulation are absolutely mandatory** for operators."
+            diag_tr = "Makine gürültüsü insan sesini tamamen yutuyor. Operatörler için kulaklık/yalıtım kesinlikle zorunludur."
+            diag_en = "Machine noise completely swallows the human voice. Headsets/insulation are absolutely mandatory for operators."
         
         diag_final = t(diag_tr, diag_en)
         st.info(t(f"💡 **Bulgu:** SII Değeri %{sii_percent:.1f}.\n\n🔍 **Teşhis:** {diag_final}", f"💡 **Finding:** SII Score is {sii_percent:.1f}%.\n\n🔍 **Diagnosis:** {diag_final}"))
@@ -890,11 +890,11 @@ if st.session_state.app_mode == "single":
         high_db_total = 10 * np.log10(high_power) if high_power > 0 else 0
 
         if low_db_total > high_db_total + 5: 
-            diag_tr = "Spektrumun sol tarafı baskın. **Yapısal titreşimler, balanssızlık veya kalın uğultu (rumble)** sorunları ön planda."
-            diag_en = "Left side of the spectrum is dominant. **Structural vibrations, unbalance, or deep rumble** issues are prominent."
+            diag_tr = "Spektrumun sol tarafı baskın. Yapısal titreşimler, balanssızlık veya kalın uğultu (rumble) sorunları ön planda."
+            diag_en = "Left side of the spectrum is dominant. Structural vibrations, unbalance, or deep rumble issues are prominent."
         elif high_db_total > low_db_total + 5: 
-            diag_tr = "Spektrumun sağ tarafı baskın. **Sürtünme, keçe deformasyonu veya tiz ıslık/whine** sorunları ön planda."
-            diag_en = "Right side of the spectrum is dominant. **Friction, seal deformation, or high-pitched whistle/whine** issues are prominent."
+            diag_tr = "Spektrumun sağ tarafı baskın. Sürtünme, keçe deformasyonu veya tiz ıslık/whine sorunları ön planda."
+            diag_en = "Right side of the spectrum is dominant. Friction, seal deformation, or high-pitched whistle/whine issues are prominent."
         else: 
             diag_tr = "Gürültü enerjisi düşük ve yüksek frekanslar arasında dengeli dağılmış (Geniş bantlı gürültü karakteristiği)."
             diag_en = "Noise energy is evenly distributed between low and high frequencies (Broadband noise characteristic)."
@@ -995,14 +995,14 @@ elif st.session_state.app_mode == "compare":
 
         col_A, col_B = st.columns(2)
         with col_A:
-            fig_cmap_A = go.Figure(go.Heatmap(x=st_A, y=sf_A[mask_A], z=slvl_A[mask_A, :], colorscale="Turbo", zmin=ref_spl-80, zmax=ref_spl+5))
-            fig_cmap_A.update_layout(title=t(f"Dosya A: {uploaded_files[0].name}", f"File A: {uploaded_files[0].name}"), yaxis_type="log", height=450)
+            fig_cmap_A = go.Figure(go.Heatmap(x=st_A, y=sf_A[mask_A], z=slvl_A[mask_A, :], colorscale="Turbo", zmin=ref_spl-80, zmax=ref_spl+5, colorbar={"title": t("Seviye<br>[dB]", "Level<br>[dB]")}))
+            fig_cmap_A.update_layout(title=t(f"Dosya A: {uploaded_files[0].name}", f"File A: {uploaded_files[0].name}"), xaxis_title=t("Zaman [s]", "Time [s]"), yaxis_title=t("Frekans [Hz]", "Frequency [Hz]"), yaxis_type="log", height=450)
             st.plotly_chart(fig_cmap_A, use_container_width=True)
             report_data["figures"]["Color Map (A - Referans)"] = fig_cmap_A
 
         with col_B:
-            fig_cmap_B = go.Figure(go.Heatmap(x=st_B, y=sf_B[mask_B], z=slvl_B[mask_B, :], colorscale="Turbo", zmin=test_spl-80, zmax=test_spl+5))
-            fig_cmap_B.update_layout(title=t(f"Dosya B: {uploaded_files[1].name}", f"File B: {uploaded_files[1].name}"), yaxis_type="log", height=450)
+            fig_cmap_B = go.Figure(go.Heatmap(x=st_B, y=sf_B[mask_B], z=slvl_B[mask_B, :], colorscale="Turbo", zmin=test_spl-80, zmax=test_spl+5, colorbar={"title": t("Seviye<br>[dB]", "Level<br>[dB]")}))
+            fig_cmap_B.update_layout(title=t(f"Dosya B: {uploaded_files[1].name}", f"File B: {uploaded_files[1].name}"), xaxis_title=t("Zaman [s]", "Time [s]"), yaxis_title=t("Frekans [Hz]", "Frequency [Hz]"), yaxis_type="log", height=450)
             st.plotly_chart(fig_cmap_B, use_container_width=True)
             report_data["figures"]["Color Map (B - Test)"] = fig_cmap_B
             
