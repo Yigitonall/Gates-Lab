@@ -291,7 +291,7 @@ if PDF_ENABLED:
                 
                 with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp_img:
                     time.sleep(0.5) # Kaleido rendering delay safety
-                    fig.write_image(tmp_img.name, format="png", engine="kaleido", width=800, height=img_height)
+                    fig.write_image(tmp_img.name, format="png", engine="kaleido", width=800, height=img_height, scale=4)
                     pdf.image(tmp_img.name, x=10, w=190)
                     tmp_img_path = tmp_img.name
                 
@@ -303,7 +303,7 @@ if PDF_ENABLED:
                     with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp_img2:
                         time.sleep(0.5)
                         # Sütun grafiğini basık göstermeyecek şekilde optimum 260px'e ayarlıyoruz
-                        fig2.write_image(tmp_img2.name, format="png", engine="kaleido", width=800, height=260)
+                        fig2.write_image(tmp_img2.name, format="png", engine="kaleido", width=800, height=260, scale=4)
                         pdf.image(tmp_img2.name, x=10, w=190)
                         tmp_img_path2 = tmp_img2.name
                     os.remove(tmp_img_path2)
