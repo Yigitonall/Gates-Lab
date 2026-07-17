@@ -1155,18 +1155,18 @@ elif st.session_state.app_mode == "compare":
         sii_df_B = compute_octave_sii(oct_B, speech_efforts_map[selected_eff_comp])
         sii_pct_B = float(sii_df_B["contribution"].sum()) * 100.0
 
-        fig_gauge_comp = make_subplots(rows=1, cols=2, specs=[[{'type': 'indicator'}, {'type': 'indicator'}]], subplot_titles=(uploaded_files[0].name, uploaded_files[1].name))
+        fig_gauge_comp = make_subplots(rows=1, cols=2, specs=[[{'type': 'indicator'}, {'type': 'indicator'}]], subplot_titles=(f"A: {uploaded_files[0].name}", f"B: {uploaded_files[1].name}"))
         
         color_A = "#28a745" if sii_pct_A >= 75 else "#ffc107" if sii_pct_A >= 45 else "#dc3545"
         color_B = "#28a745" if sii_pct_B >= 75 else "#ffc107" if sii_pct_B >= 45 else "#dc3545"
 
-        fig_gauge_comp.add_trace(go.Indicator(mode="gauge+number", value=sii_pct_A, title={'text': "SII A"}, domain={'x': [0, 1], 'y': [0, 1]},
+        fig_gauge_comp.add_trace(go.Indicator(mode="gauge+number", value=sii_pct_A, domain={'x': [0, 1], 'y': [0, 1]},
             gauge={'axis': {'range': [0, 100], 'tickwidth': 1, 'tickcolor': "darkblue"}, 'bar': {'color': color_A}, 'bgcolor': "white", 'borderwidth': 2, 'bordercolor': "gray", 'steps': [{'range': [0, 45], 'color': 'rgba(220, 53, 69, 0.3)'}, {'range': [45, 75], 'color': 'rgba(255, 193, 7, 0.3)'}, {'range': [75, 100], 'color': 'rgba(40, 167, 69, 0.3)'}]}
         ), row=1, col=1)
-        fig_gauge_comp.add_trace(go.Indicator(mode="gauge+number", value=sii_pct_B, title={'text': "SII B"}, domain={'x': [0, 1], 'y': [0, 1]},
+        fig_gauge_comp.add_trace(go.Indicator(mode="gauge+number", value=sii_pct_B, domain={'x': [0, 1], 'y': [0, 1]},
             gauge={'axis': {'range': [0, 100], 'tickwidth': 1, 'tickcolor': "darkblue"}, 'bar': {'color': color_B}, 'bgcolor': "white", 'borderwidth': 2, 'bordercolor': "gray", 'steps': [{'range': [0, 45], 'color': 'rgba(220, 53, 69, 0.3)'}, {'range': [45, 75], 'color': 'rgba(255, 193, 7, 0.3)'}, {'range': [75, 100], 'color': 'rgba(40, 167, 69, 0.3)'}]}
         ), row=1, col=2)
-        fig_gauge_comp.update_layout(height=400, margin=dict(t=50, b=30))
+        fig_gauge_comp.update_layout(height=400, margin=dict(t=60, b=30))
         st.plotly_chart(fig_gauge_comp, use_container_width=True)
         report_data["figures"]["SII Gauge"] = fig_gauge_comp
 
