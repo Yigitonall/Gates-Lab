@@ -56,7 +56,7 @@ if st.session_state.app_mode == "landing":
     header[data-testid="stHeader"] {{ display: none !important; }}
     
     .block-container {{
-        padding-top: 20vh !important;
+        padding-top: 38vh !important;
         max-width: 1000px !important;
     }}
     
