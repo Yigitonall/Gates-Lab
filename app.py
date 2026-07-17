@@ -46,6 +46,8 @@ if "analyze" not in st.session_state:
     st.session_state.analyze = False
 if "pdf_ready" not in st.session_state:
     st.session_state.pdf_ready = False
+if "lang" not in st.session_state:
+    st.session_state.lang = "tr"
 
 def reset_analysis():
     st.session_state.analyze = False
@@ -56,17 +58,20 @@ def go_to_main_menu():
     reset_analysis()
 
 # Dil Seçimi Sidebar'ın en üstünde (Sadece mod seçiliyse sidebar gösterilir)
-lang = "tr"
 if st.session_state.app_mode is not None:
     try:
         st.sidebar.image("gates_logo.png", use_container_width=True)
     except:
         pass
-    lang_choice = st.sidebar.radio("🌐 Language / Dil", ["Türkçe", "English"], horizontal=True)
-    lang = "tr" if lang_choice == "Türkçe" else "en"
+    lang_idx = 0 if st.session_state.lang == "tr" else 1
+    lang_choice = st.sidebar.radio("🌐 Language / Dil", ["Türkçe", "English"], index=lang_idx, horizontal=True, key="sidebar_lang")
+    st.session_state.lang = "tr" if lang_choice == "Türkçe" else "en"
+
+# Tüm sistemde geçerli olacak global dil referansı
+lang = st.session_state.lang
 
 def t(tr_text: str, en_text: str) -> str:
-    return tr_text if lang == "tr" else en_text
+    return tr_text if st.session_state.lang == "tr" else en_text
 
 # ============================================================
 # 1. KARŞILAMA EKRANI (LANDING PAGE)
@@ -106,12 +111,25 @@ if st.session_state.app_mode is None:
     .landing-subtitle { 
         text-align: center; color: #555555; font-size: 1.2rem; margin-bottom: 3rem; 
     }
+    /* Ana menüdeki dil seçimi butonunu ortala */
+    div[data-testid="stRadio"] {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        margin-bottom: 0.5rem;
+    }
     </style>
     """, unsafe_allow_html=True)
 
-    # İŞTE ÇÖZÜM: Görünmez HTML bloğu. Yüksekliği ekranın %60'ı kadar (60vh).
+    # İŞTE ÇÖZÜM: Görünmez HTML bloğu. (Dil butonu yüksekliğini telafi etmek için 55vh yapıldı)
     # Bu blok kendinden sonra gelen yazıları ve butonları zorla ekranın alt kısmına (beyaz alana) iter.
-    st.markdown('<div style="height: 60vh;"></div>', unsafe_allow_html=True)
+    st.markdown('<div style="height: 55vh;"></div>', unsafe_allow_html=True)
+
+    # Ana Menü Dil Seçimi
+    lang_idx = 0 if st.session_state.lang == "tr" else 1
+    main_lang_choice = st.radio("Dil Seçimi", ["🇹🇷 Türkçe", "🇬🇧 English"], index=lang_idx, horizontal=True, label_visibility="collapsed", key="main_lang")
+    st.session_state.lang = "tr" if main_lang_choice == "🇹🇷 Türkçe" else "en"
+    lang = st.session_state.lang # Değişimi anında yansıtmak için
 
     st.markdown('<div class="landing-title">GATES R&D NVH ANALYSIS SYSTEM</div>', unsafe_allow_html=True)
     st.markdown(f'<div class="landing-subtitle">{t("Lütfen yapmak istediğiniz analiz tipini seçin", "Please select the type of analysis you want to perform")}</div>', unsafe_allow_html=True)
@@ -317,7 +335,7 @@ if PDF_ENABLED:
                 pdf.cell(0, 10, clean_text_for_fpdf(title_text), ln=True)
                 
                 fig = report_data["figures"][fig_key]
-                img_height = 320 if fig_key == "SII Gauge" else 400
+                img_height = 300 if fig_key == "SII Gauge" else 400
                 
                 with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp_img:
                     time.sleep(0.5) 
@@ -331,7 +349,7 @@ if PDF_ENABLED:
                     fig2 = report_data["figures"]["SII Bands"]
                     with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp_img2:
                         time.sleep(0.5)
-                        fig2.write_image(tmp_img2.name, format="png", engine="kaleido", width=800, height=280, scale=4)
+                        fig2.write_image(tmp_img2.name, format="png", engine="kaleido", width=800, height=260, scale=4)
                         pdf.image(tmp_img2.name, x=10, w=190)
                         tmp_img_path2 = tmp_img2.name
                     os.remove(tmp_img_path2)
