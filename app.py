@@ -285,9 +285,12 @@ if PDF_ENABLED:
                 pdf.cell(0, 10, clean_text_for_fpdf(title_text), ln=True)
                 
                 fig = report_data["figures"][fig_key]
+                # SII grafiklerini dikeyde daraltarak altındaki tabloya aynı sayfada yer açıyoruz
+                img_height = 250 if fig_key == "SII Gauge" else 400
+                
                 with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp_img:
                     time.sleep(0.5) # Kaleido rendering delay safety
-                    fig.write_image(tmp_img.name, format="png", engine="kaleido", width=800, height=400)
+                    fig.write_image(tmp_img.name, format="png", engine="kaleido", width=800, height=img_height)
                     pdf.image(tmp_img.name, x=10, w=190)
                     tmp_img_path = tmp_img.name
                 
@@ -298,7 +301,8 @@ if PDF_ENABLED:
                     fig2 = report_data["figures"]["SII Bands"]
                     with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp_img2:
                         time.sleep(0.5)
-                        fig2.write_image(tmp_img2.name, format="png", engine="kaleido", width=800, height=350)
+                        # Sütun grafiğini de daraltıp (350 -> 220) tablonun tek sayfaya sığmasını garantiliyoruz
+                        fig2.write_image(tmp_img2.name, format="png", engine="kaleido", width=800, height=220)
                         pdf.image(tmp_img2.name, x=10, w=190)
                         tmp_img_path2 = tmp_img2.name
                     os.remove(tmp_img_path2)
@@ -316,7 +320,8 @@ if PDF_ENABLED:
                         pdf.ln(5)
                         
                         # Sayfa sonuna yaklaşıldıysa tabloyu bölmemek için yeni sayfaya geç
-                        if pdf.get_y() > 220:
+                        # Eşik değerini 220'den 240'a çıkararak alt sınır toleransını artırdık
+                        if pdf.get_y() > 240:
                             pdf.add_page()
                             
                         # Ana Başlık: TEŞHİS
