@@ -141,12 +141,12 @@ if st.session_state.app_mode is None:
     col1, col2, col3, col4 = st.columns([1, 3, 3, 1])
     
     with col2:
-        if st.button(t("🔍 TEKLİ SES ANALİZİ\n(Single Analysis)", "🔍 SINGLE NOISE ANALYSIS\n(Standard)"), use_container_width=True):
+        if st.button(t("🔍 TEKLİ SES ANALİZİ", "🔍 SINGLE NOISE ANALYSIS"), use_container_width=True):
             st.session_state.app_mode = "single"
             st.rerun()
             
     with col3:
-        if st.button(t("⚖️ A/B KARŞILAŞTIRMA ANALİZİ\n(Comparative Analysis)", "⚖️ A/B COMPARATIVE ANALYSIS\n(Reference vs Test)"), use_container_width=True):
+        if st.button(t("⚖️ A/B KARŞILAŞTIRMA ANALİZİ", "⚖️ A/B COMPARATIVE ANALYSIS"), use_container_width=True):
             st.session_state.app_mode = "compare"
             st.rerun()
             
