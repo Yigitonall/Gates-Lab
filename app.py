@@ -47,17 +47,22 @@ if st.session_state.app_mode == "landing":
     else:
         bg_css = ""
 
-    # Sadece Ana Menüye özel CSS (Sidebar'ı gizle, üst barı gizle, ortala, butonları şıklaştır)
+    # Sadece Ana Menüye özel CSS (Sidebar'ı gizle, üst barı gizle, ortala, butonları şıklaştır, scroll'u kapat)
     landing_css = f"""
     {bg_css}
     <style>
+    /* Ana menüde scroll (kaydırma) özelliğini tamamen kapat */
+    html, body, [data-testid="stAppViewContainer"], [data-testid="stMain"] {{
+        overflow: hidden !important;
+    }}
+    
     [data-testid="stSidebar"] {{ display: none !important; }}
     [data-testid="collapsedControl"] {{ display: none !important; }}
     header[data-testid="stHeader"] {{ display: none !important; }}
     
     .block-container {{
-        padding-top: 38vh !important;
-        max-width: 1000px !important;
+        padding-top: 52vh !important; /* Yazıları ve butonları beyaz kısma (aşağı) indir */
+        max-width: 1200px !important; /* Başlığın tek satıra sığması için genişliği artırdık */
     }}
     
     div.stButton > button {{
@@ -82,8 +87,8 @@ if st.session_state.app_mode == "landing":
     """
     st.markdown(landing_css, unsafe_allow_html=True)
 
-    # Başlık ve Alt Başlık
-    st.markdown("<h1 style='text-align: center; color: #E61A25; font-size: 3.5rem; font-family: sans-serif;'>GATES R&D NVH ANALYSIS SYSTEM</h1>", unsafe_allow_html=True)
+    # Başlık ve Alt Başlık (Tek satır olması için white-space: nowrap ve font-size ayarlandı)
+    st.markdown("<h1 style='text-align: center; color: #252525; font-size: 3.2rem; white-space: nowrap; font-family: sans-serif; margin-top: 0px;'>GATES R&D NVH ANALYSIS SYSTEM</h1>", unsafe_allow_html=True)
     st.markdown("<h3 style='text-align: center; color: #444; font-size: 1.2rem; margin-bottom: 4rem; font-weight: 400;'>Lütfen yapmak istediğiniz analiz tipini seçin</h3>", unsafe_allow_html=True)
 
     # Butonlar
