@@ -173,14 +173,18 @@ if PDF_ENABLED:
         # --- İLK SAYFA ANTETİ (GRID) ---
         pdf.set_line_width(0.5)
         
-        # Dış Çerçeve (Logo ve Rapor Numarası Bloğu - H: 28mm)
-        # Siyah çerçevenin önce çizilmesi ve kırmızı şeridin onun içine hizalanması
-        pdf.rect(10, 10, 190, 28)
-        
-        # Kırmızı üst şerit (İnce: 2mm)
-        # Çizgi kalınlığı 0.5mm olduğu için içeriye 0.25mm ofset verilerek milimetrik hizalandı
+        # --- ÖNCE DOLGULAR (FILL) ÇİZİLİYOR ---
+        # Kırmızı üst şerit
         pdf.set_fill_color(200, 0, 0)
         pdf.rect(10.25, 10.25, 189.5, 2, 'F')
+        
+        # Gri Şerit (36'dan 40'a kadar)
+        pdf.set_fill_color(240, 240, 240)
+        pdf.rect(10.25, 36, 189.5, 4, 'F')
+        
+        # --- SONRA ÇİZGİLER (BORDER) ÇİZİLİYOR ---
+        # Logo ve Rapor Numarası Bloğu (H: 30mm) - 40'a kadar uzatıldı
+        pdf.rect(10, 10, 190, 30)
         
         # Logo alanı (Siyah Logomuz)
         try:
@@ -191,16 +195,12 @@ if PDF_ENABLED:
             pdf.cell(40, 10, "GATES")
             
         pdf.set_font("Arial", 'B', 20)
-        pdf.set_xy(80, 19)
+        pdf.set_xy(80, 20)
         pdf.cell(50, 10, "Report", align='C')
         
         pdf.set_font("Arial", 'B', 10)
-        pdf.set_xy(140, 15)
+        pdf.set_xy(140, 16)
         pdf.cell(58, 6, clean_text_for_fpdf(f"Report-No.: {antet_data.get('report_no', '')}"), align='R')
-        
-        # Gri Şerit
-        pdf.set_fill_color(240, 240, 240)
-        pdf.rect(10, 36, 190, 4, 'F')
         
         # Konu (Subject) Bloğu (H: 12mm)
         pdf.rect(10, 40, 190, 12)
@@ -213,10 +213,10 @@ if PDF_ENABLED:
         
         # Date & Location Bloğu (H: 8mm)
         pdf.rect(10, 52, 190, 8)
-        # Dikey çizgiler (Hizaları milimetrik ayarlandı)
+        # Dikey çizgiler
         pdf.line(125, 52, 125, 60) # Location ayracı
         pdf.line(42, 52, 42, 60)   # Date değer ayracı
-        pdf.line(145, 52, 145, 60) # Location değer ayracı
+        pdf.line(152, 52, 152, 60) # Location değer ayracı (148'den 152'ye kaydırıldı)
         
         pdf.set_font("Arial", '', 10)
         pdf.set_xy(11, 53)
@@ -225,16 +225,16 @@ if PDF_ENABLED:
         pdf.cell(80, 6, clean_text_for_fpdf(antet_data.get('date', '')))
         
         pdf.set_xy(126, 53)
-        pdf.cell(18, 6, "Location:")
-        pdf.set_xy(146, 53)
-        pdf.cell(50, 6, clean_text_for_fpdf(antet_data.get('location', '')))
+        pdf.cell(25, 6, "Location:")
+        pdf.set_xy(154, 53)
+        pdf.cell(44, 6, clean_text_for_fpdf(antet_data.get('location', '')))
         
         # Author & Department Bloğu (H: 16mm - Çok satırlılar için geniş)
         pdf.rect(10, 60, 190, 16)
         # Dikey çizgiler
         pdf.line(125, 60, 125, 76) # Department ayracı
         pdf.line(42, 60, 42, 76)   # Author değer ayracı
-        pdf.line(145, 60, 145, 76) # Department değer ayracı
+        pdf.line(152, 60, 152, 76) # Department değer ayracı (148'den 152'ye kaydırıldı)
         
         pdf.set_font("Arial", '', 10)
         pdf.set_xy(11, 62)
@@ -245,10 +245,10 @@ if PDF_ENABLED:
         
         pdf.set_font("Arial", '', 10)
         pdf.set_xy(126, 62)
-        pdf.cell(18, 6, "Department:")
+        pdf.cell(25, 6, "Department:")
         pdf.set_font("Arial", '', 9)
-        pdf.set_xy(146, 62)
-        pdf.multi_cell(50, 4, clean_text_for_fpdf(antet_data.get('department', '')))
+        pdf.set_xy(154, 62)
+        pdf.multi_cell(44, 4, clean_text_for_fpdf(antet_data.get('department', '')))
         
         # Distribution List Bloğu (H: 10mm)
         pdf.rect(10, 76, 190, 10)
