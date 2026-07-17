@@ -106,6 +106,27 @@ else:
     # =====================================================================
     # ORTAK SİDEBAR VE FONKSİYONLAR (ANALİZ MODLARI)
     # =====================================================================
+    # CSS Reset: Ana menüden kalan arka plan, scroll gizleme ve genişlik ayarlarını sıfırla
+    st.markdown("""
+    <style>
+    html, body, [data-testid="stAppViewContainer"], [data-testid="stMain"] {
+        overflow: auto !important;
+    }
+    .stApp {
+        background-image: none !important;
+    }
+    [data-testid="stSidebar"], 
+    [data-testid="collapsedControl"], 
+    header[data-testid="stHeader"] { 
+        display: unset !important; 
+    }
+    .block-container {
+        padding-top: 3rem !important;
+        max-width: unset !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
     with st.sidebar:
         if os.path.exists("gates_logo.png"):
             st.image("gates_logo.png", use_container_width=True)
