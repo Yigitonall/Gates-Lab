@@ -106,7 +106,7 @@ if PDF_ENABLED:
             if self.page_no() > 1:
                 self.set_line_width(0.5)
                 
-                # Kırmızı üst şerit
+                # Kırmızı üst şerit (Çerçevenin dışına taşmasın diye daraltıldı)
                 self.set_fill_color(200, 0, 0)
                 self.rect(10, 10, 190, 2, 'F')
                 
@@ -132,12 +132,12 @@ if PDF_ENABLED:
                 self.set_fill_color(240, 240, 240)
                 self.rect(10, 32, 190, 3, 'F')
                 
-                # İçeriğin antetin altına taşmaması için kalemi aşağı itiyoruz
+                # Grafikler antete binmesin diye y-koordinatını aşağı kaydırıyoruz
                 self.set_y(40)
 
         def footer(self):
-            # Alt kısımdan 25mm yukarıya konumlan
-            self.set_y(-25)
+            # Alt kısımdan 30mm yukarıya konumlan (Taşmaları önlemek için)
+            self.set_y(-30)
             self.set_font("Arial", "", 8)
             
             self.set_line_width(0.5)
@@ -145,7 +145,7 @@ if PDF_ENABLED:
             box_x = 10
             box_y = self.get_y()
             box_w = 190
-            box_h = 16
+            box_h = 16 # Çok uzun yolları sığdırmak için yüksekliği 16mm yaptık
             
             # Dış çerçeve ve iç dikey çizgi
             self.rect(box_x, box_y, box_w, box_h)
@@ -156,9 +156,9 @@ if PDF_ENABLED:
             valid_text = "This document was created electronically and is valid without signature."
             combined_text = f"{path_text}\n{valid_text}"
             
-            # Metni dikey ortalamak için hafif üstten boşluk veriyoruz
+            # Yazıyı dikey olarak mükemmel ortalamak için hafif boşluk bırakıyoruz
             self.set_xy(box_x, box_y + 2)
-            self.multi_cell(160, 4, combined_text, align='C')
+            self.multi_cell(160, 5, combined_text, align='C')
             
             # Sağ bölüm - Sayfa Numarası
             self.set_xy(box_x + 160, box_y)
@@ -167,7 +167,7 @@ if PDF_ENABLED:
     def build_pdf_report(report_data, antet_data):
         pdf = GatesReport(report_data, antet_data)
         pdf.alias_nb_pages()
-        pdf.set_auto_page_break(auto=True, margin=30)
+        pdf.set_auto_page_break(auto=True, margin=35) # Alt marjini artırdık
         pdf.add_page()
         
         # --- İLK SAYFA ANTETİ (GRID) ---
@@ -182,7 +182,7 @@ if PDF_ENABLED:
         pdf.set_fill_color(200, 0, 0)
         pdf.rect(10.25, 10.25, 189.5, 2, 'F')
         
-        # Logo alanı
+        # Logo alanı (Siyah Logomuz)
         try:
             pdf.image("gatessiyah_logo.png", x=12, y=14, w=0, h=14)
         except:
@@ -213,7 +213,7 @@ if PDF_ENABLED:
         
         # Date & Location Bloğu (H: 8mm)
         pdf.rect(10, 52, 190, 8)
-        # Dikey çizgiler
+        # Dikey çizgiler (Hizaları milimetrik ayarlandı)
         pdf.line(125, 52, 125, 60) # Location ayracı
         pdf.line(42, 52, 42, 60)   # Date değer ayracı
         pdf.line(145, 52, 145, 60) # Location değer ayracı
@@ -229,7 +229,7 @@ if PDF_ENABLED:
         pdf.set_xy(146, 53)
         pdf.cell(50, 6, clean_text_for_fpdf(antet_data.get('location', '')))
         
-        # Author & Department Bloğu (H: 16mm)
+        # Author & Department Bloğu (H: 16mm - Çok satırlılar için geniş)
         pdf.rect(10, 60, 190, 16)
         # Dikey çizgiler
         pdf.line(125, 60, 125, 76) # Department ayracı
@@ -247,8 +247,7 @@ if PDF_ENABLED:
         pdf.set_xy(126, 62)
         pdf.cell(18, 6, "Department:")
         pdf.set_font("Arial", '', 9)
-        self_y = 62
-        pdf.set_xy(146, self_y)
+        pdf.set_xy(146, 62)
         pdf.multi_cell(50, 4, clean_text_for_fpdf(antet_data.get('department', '')))
         
         # Distribution List Bloğu (H: 10mm)
@@ -282,6 +281,7 @@ if PDF_ENABLED:
                     # 1. Gauge Grafiği
                     fig1 = report_data["figures"]["SII Gauge"]
                     with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp_img1:
+                        time.sleep(0.2)
                         fig1.write_image(tmp_img1.name, format="png", engine="kaleido", width=800, height=350)
                         pdf.image(tmp_img1.name, x=20, w=170)
                         tmp_img_path1 = tmp_img1.name
@@ -291,6 +291,7 @@ if PDF_ENABLED:
                     if "SII Bands" in report_data["figures"]:
                         fig2 = report_data["figures"]["SII Bands"]
                         with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp_img2:
+                            time.sleep(0.2)
                             fig2.write_image(tmp_img2.name, format="png", engine="kaleido", width=800, height=350)
                             pdf.image(tmp_img2.name, x=20, w=170)
                             tmp_img_path2 = tmp_img2.name
@@ -317,7 +318,6 @@ if PDF_ENABLED:
                     
                     fig = report_data["figures"][fig_key]
                     with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp_img:
-                        # Bekleme payı eklendi (Donmaları önlemek için)
                         time.sleep(0.2)
                         fig.write_image(tmp_img.name, format="png", engine="kaleido", width=800, height=450)
                         pdf.image(tmp_img.name, x=10, w=190)
@@ -752,31 +752,43 @@ with tab_ai:
 
     col_gauge, col_bar = st.columns(2)
     with col_gauge:
+        # İbre (Gauge) grafiğinin görünmesi için "domain" eklendi!
         fig_gauge = go.Figure(go.Indicator(
-            mode="gauge+number", value=sii_percent, title={'text': "SII Skoru"},
+            mode="gauge+number", 
+            value=sii_percent, 
+            title={'text': "SII Skoru"},
+            domain={'x': [0, 1], 'y': [0, 1]},
             gauge={
                 'axis': {'range': [0, 100], 'tickwidth': 1, 'tickcolor': "darkblue"},
                 'bar': {'color': color_sii},
-                'bgcolor': "white", 'borderwidth': 2, 'bordercolor': "gray",
-                'steps': [{'range': [0, 45], 'color': 'rgba(220, 53, 69, 0.3)'},
-                          {'range': [45, 75], 'color': 'rgba(255, 193, 7, 0.3)'},
-                          {'range': [75, 100], 'color': 'rgba(40, 167, 69, 0.3)'}]
+                'bgcolor': "white", 
+                'borderwidth': 2, 
+                'bordercolor': "gray",
+                'steps': [
+                    {'range': [0, 45], 'color': 'rgba(220, 53, 69, 0.3)'},
+                    {'range': [45, 75], 'color': 'rgba(255, 193, 7, 0.3)'},
+                    {'range': [75, 100], 'color': 'rgba(40, 167, 69, 0.3)'}
+                ]
             }
         ))
-        fig_gauge.update_layout(height=400, margin=dict(l=20, r=20, t=50, b=20))
+        fig_gauge.update_layout(height=400, margin=dict(l=30, r=30, t=50, b=30))
         st.plotly_chart(fig_gauge, use_container_width=True)
         report_data["figures"]["SII Gauge"] = fig_gauge
 
     with col_bar:
+        # Çubukların aralarının açık görünmemesi için "xaxis_type='category'" eklendi!
         fig_contribution = go.Figure(go.Bar(
             x=[format_frequency(v) for v in sii_table["frequency_hz"]], 
             y=100.0 * sii_table["contribution"], 
-            marker_color="#E61A25"
+            marker_color="#E61A25",
+            marker_line_color="#B0101A",
+            marker_line_width=1
         ))
         fig_contribution.update_layout(
             title=t(f"Frekanslara Göre SII Katkısı", f"SII Contribution by Frequency"), 
             height=400,
-            bargap=0.08
+            bargap=0.1,
+            xaxis_type='category'
         )
         st.plotly_chart(fig_contribution, use_container_width=True)
         report_data["figures"]["SII Bands"] = fig_contribution
@@ -796,8 +808,22 @@ with tab_octave:
     octave_plot_df = third_octave_df[third_octave_df["exact_hz"] <= max_display_frequency].copy()
     octave_plot_df["label"] = octave_plot_df["nominal_hz"].map(format_frequency)
 
-    fig_octave = go.Figure(go.Bar(x=octave_plot_df["label"], y=octave_plot_df["level_db_spl"], marker_color="#E61A25"))
-    fig_octave.update_layout(title=t("1/3 Oktav Bant Spektrumu", "1/3 Octave Band Spectrum"), height=560, bargap=0.08)
+    # X eksenindeki yazı ve sayı karmaşasının çubuk aralıklarını bozmasını engellemek
+    # için "xaxis_type='category'" eklendi.
+    fig_octave = go.Figure(go.Bar(
+        x=octave_plot_df["label"], 
+        y=octave_plot_df["level_db_spl"], 
+        marker_color="#E61A25",
+        marker_line_color="#B0101A",
+        marker_line_width=1
+    ))
+    fig_octave.update_layout(
+        title=t("1/3 Oktav Bant Spektrumu", "1/3 Octave Band Spectrum"), 
+        height=560, 
+        bargap=0.05,
+        xaxis_type='category',
+        xaxis_tickangle=-45
+    )
     st.plotly_chart(fig_octave, use_container_width=True)
     report_data["figures"]["1/3 Octave"] = fig_octave
 
