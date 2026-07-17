@@ -168,31 +168,33 @@ if PDF_ENABLED:
         # --- İLK SAYFA ANTETİ (YENİDEN BOYUTLANDIRILMIŞ) ---
         pdf.set_line_width(0.5)
         
-        # Kırmızı üst şerit
+        # Kırmızı üst şerit (Daha ince: 2mm)
         pdf.set_fill_color(200, 0, 0)
-        pdf.rect(10, 10, 190, 4, 'F')
+        pdf.rect(10, 10, 190, 2, 'F')
         
-        # Logo ve Rapor Numarası Bloğu (H: 22mm)
-        pdf.rect(10, 14, 190, 22)
+        # Logo ve Rapor Numarası Bloğu (H: 24mm)
+        pdf.rect(10, 12, 190, 24)
         try:
             # PDF İçin Güncellenmiş Siyah Logo
-            pdf.image("gatessiyah_logo.png", x=12, y=17, w=0, h=16)
+            pdf.image("gatessiyah_logo.png", x=12, y=16, w=0, h=16)
         except:
             pdf.set_font("Arial", 'B', 16)
-            pdf.set_xy(12, 20)
+            pdf.set_xy(12, 19)
             pdf.cell(40, 10, "GATES")
             
         pdf.set_font("Arial", 'B', 20)
-        pdf.set_xy(80, 20)
+        pdf.set_xy(80, 19)
         pdf.cell(50, 10, "Report", align='C')
         
         pdf.set_font("Arial", 'B', 10)
-        pdf.set_xy(140, 16)
+        pdf.set_xy(140, 15)
         pdf.cell(58, 6, clean_text_for_fpdf(f"Report-No.: {antet_data.get('report_no', '')}"), align='R')
         
         # Gri Şerit
         pdf.set_fill_color(240, 240, 240)
         pdf.rect(10, 36, 190, 4, 'F')
+        
+        # Konu (Subject) Bloğu (H: 12mm)
         
         # Konu (Subject) Bloğu (H: 12mm)
         pdf.rect(10, 40, 190, 12)
