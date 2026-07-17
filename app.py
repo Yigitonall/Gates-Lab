@@ -155,10 +155,11 @@ if PDF_ENABLED:
                 
                 # Logo alanı
                 try:
-                    self.image("gates_logo.png", x=12, y=14, w=35)
+                    # Logoyu yüksekliğe (h=14) göre sınırla ki alt veya üst şeride taşmasın
+                    self.image("gates_logo.png", x=11, y=13, w=0, h=14)
                 except:
                     self.set_font("Arial", 'B', 14)
-                    self.set_xy(12, 20)
+                    self.set_xy(11, 16)
                     self.cell(35, 10, "GATES")
                     
                 # Ortada Report Yazısı
