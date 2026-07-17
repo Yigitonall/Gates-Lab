@@ -94,11 +94,11 @@ SII_NORMAL_SPEECH = np.array([34.75, 34.27, 25.01, 17.32, 9.33, 1.13], dtype=flo
 # ============================================================
 def clean_text_for_fpdf(txt):
     if not isinstance(txt, str): return str(txt)
-    tr_map = {'ç':'c', 'ğ':'g', 'ı':'i', 'ö':'o', 'ş':'s', 'ü':'u', 'Ç':'C', 'Ğ':'G', 'İ':'I', 'Ö':'O', 'Ş':'S', 'Ü':'U'}
+    tr_map = {'ç':'c', 'ğ':'g', 'ı':'i', 'ö':'o', 'ş':'s', 'ü':'u', 'Ç':'C', 'Ğ':'G', 'İ':'I', 'Ö':'O', 'Ş':'S', 'Ü':'U', '⚖️':'', '🟦':'', '🟥':'', '📊':'', '🔍':'', '💡':''}
     for tr, eng in tr_map.items():
         txt = txt.replace(tr, eng)
     txt = txt.replace("**", "")
-    return txt.encode('latin-1', 'ignore').decode('latin-1')
+    return txt.encode('latin-1', 'ignore').decode('latin-1').strip()
 
 if PDF_ENABLED:
     class GatesReport(FPDF):
@@ -111,10 +111,11 @@ if PDF_ENABLED:
             # İlk sayfa hariç diğer sayfaların üst anteti
             if self.page_no() > 1:
                 self.set_line_width(0.5)
-                # Kırmızı üst şerit
+                # Kırmızı üst şerit (tam köşeye oturtuldu)
                 self.set_fill_color(200, 0, 0)
                 self.rect(10.25, 10.25, 189.5, 2, 'F')
-                # Dış Çerçeve
+                
+                # Siyah Dış Çerçeve
                 self.rect(10, 10, 190, 24)
                 
                 # Logo alanı (Siyah-Beyaz Logo)
@@ -139,8 +140,8 @@ if PDF_ENABLED:
                 self.set_fill_color(240, 240, 240)
                 self.rect(10.25, 30, 189.5, 4, 'F')
                 
-                # Çizim imlecini (pen) antetin altına alıyoruz ki grafik yazıları taşmasın
-                self.set_y(40)
+                # Çizim imlecini antetin altına alıyoruz ki grafik yazıları taşmasın
+                self.set_y(35)
 
         def footer(self):
             # Alt kısımdan yukarıya konumlan
@@ -185,32 +186,29 @@ if PDF_ENABLED:
         # --- İLK SAYFA ANTETİ ---
         pdf.set_line_width(0.5)
         
-        # Dış Çerçeve (Logo ve Rapor Numarası Bloğu - H: 26mm)
-        # Önce dış çerçeveyi çiziyoruz ki kırmızı şerit üstüne binip köşeleri bozmasın
-        pdf.rect(10, 10, 190, 28)
+        # Gri alt şerit (Önce çizilir ki siyah çerçeve üstte kalsın ve gri dışarı taşmasın)
+        pdf.set_fill_color(240, 240, 240)
+        pdf.rect(10.25, 36, 189.5, 4, 'F')
         
-        # Kırmızı üst şerit (İnce: 2mm, Çerçevenin iç kenarına milimetrik hizalandı)
+        # Kırmızı üst şerit (Çerçevenin iç kenarına milimetrik hizalandı)
         pdf.set_fill_color(200, 0, 0)
         pdf.rect(10.25, 10.25, 189.5, 2, 'F')
         
-        # Dış Çerçeveler ve Kutular (Çizgiler)
-        pdf.rect(10, 38, 190, 12) # Subject Bloğu
-        pdf.rect(10, 50, 190, 8)  # Date/Location Bloğu
-        pdf.rect(10, 58, 190, 16) # Author/Dept Bloğu
-        pdf.rect(10, 74, 190, 10) # Distribution Bloğu
+        # Dış Çerçeve ve Kutular (Çizgiler)
+        pdf.rect(10, 10, 190, 30) # Logo ve Rapor Numarası Bloğu (H: 30mm)
+        pdf.rect(10, 40, 190, 14) # Subject Bloğu
+        pdf.rect(10, 54, 190, 10) # Date/Location Bloğu
+        pdf.rect(10, 64, 190, 16) # Author/Dept Bloğu
+        pdf.rect(10, 80, 190, 10) # Distribution Bloğu
         
         # Dikey Ayırıcı Çizgiler (Seperatörler)
-        pdf.line(42, 50, 42, 84)   # Sol etiketlerin (Date, Author, Dist) ayırıcısı
-        pdf.line(125, 50, 125, 74) # Orta ayırıcı (Location, Dept)
-        pdf.line(152, 50, 152, 74) # Sağ etiketlerin ayırıcısı (Department kelimesi sığsın diye 152'ye çekildi)
-        
-        # Gri alt şerit (Logo bloğunun en altına)
-        pdf.set_fill_color(240, 240, 240)
-        pdf.rect(10.25, 34, 189.5, 4, 'F')
+        pdf.line(42, 54, 42, 90)   # Sol etiketlerin (Date, Author, Dist) ayırıcısı
+        pdf.line(125, 54, 125, 80) # Orta ayırıcı (Location, Dept)
+        pdf.line(152, 54, 152, 80) # Sağ etiketlerin ayırıcısı
         
         # Logo
         try:
-            pdf.image("gatessiyah_logo.png", x=12, y=14, w=0, h=14)
+            pdf.image("gatessiyah_logo.png", x=12, y=14, w=0, h=16)
         except:
             pdf.set_font("Arial", 'B', 20)
             pdf.set_xy(12, 19)
@@ -227,50 +225,50 @@ if PDF_ENABLED:
         # Antet Metinleri (Hücre İçerikleri)
         pdf.set_font("Arial", '', 10)
         
-        pdf.set_xy(11, 41)
+        pdf.set_xy(11, 44)
         pdf.cell(30, 6, "Subject:")
         pdf.set_font("Arial", 'B', 14)
-        pdf.set_xy(43, 41)
+        pdf.set_xy(43, 44)
         pdf.cell(146, 6, clean_text_for_fpdf(antet_data.get('subject', '')), align='C')
         
         pdf.set_font("Arial", '', 10)
-        pdf.set_xy(11, 51)
+        pdf.set_xy(11, 56)
         pdf.cell(30, 6, "Date:")
-        pdf.set_xy(43, 51)
+        pdf.set_xy(43, 56)
         pdf.cell(81, 6, clean_text_for_fpdf(antet_data.get('date', '')))
         
-        pdf.set_xy(126, 51)
+        pdf.set_xy(126, 56)
         pdf.cell(25, 6, "Location:")
-        pdf.set_xy(153, 51)
+        pdf.set_xy(153, 56)
         pdf.cell(46, 6, clean_text_for_fpdf(antet_data.get('location', '')))
         
-        pdf.set_xy(11, 60)
+        pdf.set_xy(11, 66)
         pdf.cell(30, 6, "Author:")
         pdf.set_font("Arial", '', 9)
-        pdf.set_xy(43, 60)
+        pdf.set_xy(43, 66)
         pdf.multi_cell(81, 4, clean_text_for_fpdf(antet_data.get('author', '')))
         
         pdf.set_font("Arial", '', 10)
-        pdf.set_xy(126, 60)
+        pdf.set_xy(126, 66)
         pdf.cell(25, 6, "Department:")
         pdf.set_font("Arial", '', 9)
-        pdf.set_xy(153, 60)
+        pdf.set_xy(153, 66)
         pdf.multi_cell(46, 4, clean_text_for_fpdf(antet_data.get('department', '')))
         
         pdf.set_font("Arial", '', 10)
-        pdf.set_xy(11, 76)
+        pdf.set_xy(11, 82)
         pdf.cell(30, 6, "Distribution list:")
-        pdf.set_xy(43, 76)
+        pdf.set_xy(43, 82)
         pdf.cell(146, 6, clean_text_for_fpdf(antet_data.get('distribution', '')))
         
         # İçeriğin antetin altına taşmaması için kalem Y pozisyonunu güncelliyoruz
-        pdf.set_y(95)
+        pdf.set_y(100)
         
         # --- GRAFİKLER VE TEŞHİSLER ---
         # Compare ve Single modlarında basılacak grafik isimleri
         sections = [
             ("Color Map", "Color Map"), 
-            ("Color Map (A - Referans)", "Color Map A"), 
+            ("Color Map (A - Referans)", "Color Map B"), 
             ("Color Map (B - Test)", "Color Map B"),
             ("Order Plot", "Order Plot"), 
             ("SII Gauge", "SII"), 
@@ -295,7 +293,7 @@ if PDF_ENABLED:
                 
                 os.remove(tmp_img_path)
                 
-                # Band grafiğini SII Gauge ile aynı sayfaya koyalım
+                # Band grafiğini SII Gauge ile aynı sayfaya koyalım (eğer varsa)
                 if fig_key == "SII Gauge" and "SII Bands" in report_data["figures"]:
                     fig2 = report_data["figures"]["SII Bands"]
                     with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp_img2:
@@ -310,22 +308,80 @@ if PDF_ENABLED:
                 if diag_key in report_data["diagnostics"]:
                     diag_data = report_data["diagnostics"][diag_key]
                     
-                    if isinstance(diag_data, list):
-                        # Tablo stili (A/B Kıyaslama)
-                        pdf.ln(2)
+                    if isinstance(diag_data, list) and len(diag_data) == 3:
+                        labelA, descA = diag_data[0]
+                        labelB, descB = diag_data[1]
+                        labelComp, descComp = diag_data[2]
+                        
+                        pdf.ln(5)
+                        
+                        # Sayfa sonuna yaklaşıldıysa tabloyu bölmemek için yeni sayfaya geç
+                        if pdf.get_y() > 220:
+                            pdf.add_page()
+                            
+                        # Ana Başlık: TEŞHİS
                         pdf.set_font("Arial", 'B', 12)
                         pdf.set_fill_color(200, 0, 0)
                         pdf.set_text_color(255, 255, 255)
-                        pdf.cell(0, 8, clean_text_for_fpdf("Teşhis ve Karşılaştırma Analizi" if lang_choice == "Türkçe" else "Diagnosis & Comparison Analysis"), border=1, fill=True, ln=True, align='C')
+                        diag_title = "TEŞHİS / DIAGNOSIS"
+                        pdf.cell(190, 8, clean_text_for_fpdf(diag_title), border=1, fill=True, ln=True, align='C')
                         
+                        # A ve B Sütun Başlıkları
+                        pdf.set_font("Arial", 'B', 10)
+                        pdf.set_fill_color(240, 240, 240)
                         pdf.set_text_color(0, 0, 0)
-                        for item_label, item_desc in diag_data:
-                            pdf.set_font("Arial", 'B', 10)
-                            pdf.set_fill_color(240, 240, 240)
-                            pdf.cell(0, 6, clean_text_for_fpdf(item_label), border="L T R", fill=True, ln=True)
-                            
-                            pdf.set_font("Arial", '', 10)
-                            pdf.multi_cell(0, 6, clean_text_for_fpdf(item_desc), border="L B R")
+                        short_labelA = labelA[:45] + "..." if len(labelA) > 48 else labelA
+                        short_labelB = labelB[:45] + "..." if len(labelB) > 48 else labelB
+                        pdf.cell(95, 6, clean_text_for_fpdf(short_labelA), border=1, fill=True, align='C')
+                        pdf.cell(95, 6, clean_text_for_fpdf(short_labelB), border=1, fill=True, ln=True, align='C')
+                        
+                        # İçerikler: A ve B (Yan Yana)
+                        pdf.set_font("Arial", '', 10)
+                        start_y = pdf.get_y()
+                        start_x = 10
+                        padding = 2
+                        
+                        # A Hücresi
+                        pdf.set_xy(start_x + padding, start_y + padding)
+                        pdf.multi_cell(95 - 2*padding, 5, clean_text_for_fpdf(descA), border=0, align='L')
+                        yA = pdf.get_y() + padding
+                        
+                        # B Hücresi
+                        pdf.set_xy(start_x + 95 + padding, start_y + padding)
+                        pdf.multi_cell(95 - 2*padding, 5, clean_text_for_fpdf(descB), border=0, align='L')
+                        yB = pdf.get_y() + padding
+                        
+                        max_y = max(yA, yB)
+                        
+                        # Dış çerçeveleri maksimum yüksekliğe göre çiz
+                        pdf.rect(start_x, start_y, 95, max_y - start_y)
+                        pdf.rect(start_x + 95, start_y, 95, max_y - start_y)
+                        
+                        # İmleci Alt Satıra (Karşılaştırma Başlığına) İndir
+                        pdf.set_y(max_y)
+                        
+                        # Karşılaştırma Başlığı
+                        pdf.set_font("Arial", 'B', 11)
+                        pdf.set_fill_color(200, 0, 0)
+                        pdf.set_text_color(255, 255, 255)
+                        pdf.cell(190, 8, clean_text_for_fpdf(labelComp), border=1, fill=True, ln=True, align='C')
+                        
+                        # Karşılaştırma İçeriği (Birleşik Tek Sütun)
+                        pdf.set_font("Arial", '', 10)
+                        pdf.set_text_color(0, 0, 0)
+                        comp_start_y = pdf.get_y()
+                        
+                        pdf.set_xy(start_x + padding, comp_start_y + padding)
+                        pdf.multi_cell(190 - 2*padding, 5, clean_text_for_fpdf(descComp), border=0, align='L')
+                        comp_max_y = pdf.get_y() + padding
+                        
+                        # Dış çerçeveyi çiz
+                        pdf.rect(start_x, comp_start_y, 190, comp_max_y - comp_start_y)
+                        
+                        # Bir sonraki blok için imleci aşağı al
+                        pdf.set_y(comp_max_y)
+                    elif isinstance(diag_data, list):
+                        pass # Yanlış format geldiğinde atla
                     else:
                         # Tekli mod stili (Düz metin)
                         pdf.set_font("Arial", '', 11)
@@ -792,7 +848,7 @@ if st.session_state.app_mode == "single":
                 x=[format_frequency(v) for v in sii_table["frequency_hz"]], y=100.0 * sii_table["contribution"], 
                 marker_color="#E61A25", marker_line_color="#B0101A", marker_line_width=1
             ))
-            fig_contribution.update_layout(title=t(f"Frekanslara Göre SII Katkısı", f"SII Contribution by Frequency"), height=400, bargap=0.1, xaxis_type='category')
+            fig_contribution.update_layout(title=t("Frekanslara Göre SII Katkısı", "SII Contribution by Frequency"), height=400, bargap=0.1, xaxis_type='category')
             st.plotly_chart(fig_contribution, use_container_width=True)
             report_data["figures"]["SII Bands"] = fig_contribution
 
@@ -809,7 +865,7 @@ if st.session_state.app_mode == "single":
         
         diag_final = t(diag_tr, diag_en)
         st.info(t(f"💡 **Bulgu:** SII Değeri %{sii_percent:.1f}.\n\n🔍 **Teşhis:** {diag_final}", f"💡 **Finding:** SII Score is {sii_percent:.1f}%.\n\n🔍 **Diagnosis:** {diag_final}"))
-        report_data["diagnostics"]["SII"] = diag_final
+        report_data["diagnostics"]["SII Gauge"] = diag_final
 
     with tab_octave:
         octave_plot_df = third_octave_df[third_octave_df["exact_hz"] <= max_display_frequency].copy()
@@ -866,8 +922,8 @@ elif st.session_state.app_mode == "compare":
     ref_spl, test_spl = 80.0, 80.0
     if len(uploaded_files) == 2:
         st.sidebar.subheader(t("🎚️ SPL Kalibrasyonları (MAX HOLD)", "🎚️ SPL Calibrations (MAX HOLD)"))
-        ref_spl = st.sidebar.number_input(t(f"MAX SPL: {uploaded_files[0].name} (A)", f"MAX SPL: {uploaded_files[0].name} (A)"), min_value=20.0, max_value=140.0, value=80.0, step=0.1, on_change=reset_analysis)
-        test_spl = st.sidebar.number_input(t(f"MAX SPL: {uploaded_files[1].name} (B)", f"MAX SPL: {uploaded_files[1].name} (B)"), min_value=20.0, max_value=140.0, value=80.0, step=0.1, on_change=reset_analysis)
+        ref_spl = st.sidebar.number_input(t(f"MAX SPL: A ({uploaded_files[0].name})", f"MAX SPL: A ({uploaded_files[0].name})"), min_value=20.0, max_value=140.0, value=80.0, step=0.1, on_change=reset_analysis)
+        test_spl = st.sidebar.number_input(t(f"MAX SPL: B ({uploaded_files[1].name})", f"MAX SPL: B ({uploaded_files[1].name})"), min_value=20.0, max_value=140.0, value=80.0, step=0.1, on_change=reset_analysis)
     elif len(uploaded_files) > 2:
         st.sidebar.error(t("Lütfen A/B analizi için tam olarak 2 adet dosya bırakın.", "Please leave exactly 2 files for A/B analysis."))
     
@@ -930,12 +986,12 @@ elif st.session_state.app_mode == "compare":
         stft_size_A = choose_segment_size(sig_A.size, 4096)
         sf_A, st_A, spsd_A = spectrogram(sig_A, fs=sr_A, window="hann", nperseg=stft_size_A, noverlap=int(stft_size_A * 0.75), mode="psd")
         slvl_A = power_to_db(spsd_A * (sf_A[1]-sf_A[0]), calib_A)
-        mask_A = (sf_A >= 20.0) & (sf_A <= min(20000.0, nyq_A))
+        mask_A = (sf_A >= 20.0) & (sf_A <= max_display_frequency)
 
         stft_size_B = choose_segment_size(sig_B.size, 4096)
         sf_B, st_B, spsd_B = spectrogram(sig_B, fs=sr_B, window="hann", nperseg=stft_size_B, noverlap=int(stft_size_B * 0.75), mode="psd")
         slvl_B = power_to_db(spsd_B * (sf_B[1]-sf_B[0]), calib_B)
-        mask_B = (sf_B >= 20.0) & (sf_B <= min(20000.0, nyq_B))
+        mask_B = (sf_B >= 20.0) & (sf_B <= max_display_frequency)
 
         col_A, col_B = st.columns(2)
         with col_A:
@@ -990,8 +1046,8 @@ elif st.session_state.app_mode == "compare":
                 diag_comp_tr = f"B dosyasında A'ya göre geniş bantlı gürültü enerjisi artışı (+{diff_mean:.1f} dB) tespit edildi."
                 diag_comp_en = f"A broadband noise energy increase (+{diff_mean:.1f} dB) was detected in File B compared to A."
         elif diff_mean < -3:
-            diag_comp_tr = f"B dosyasında A'ya göre genel gürültü enerjisinde iyileşme/düşüş ({diff_mean:.1f} dB) tespit edildi."
-            diag_comp_en = f"An improvement/decrease in overall noise energy ({diff_mean:.1f} dB) was detected in File B compared to A."
+            diag_comp_tr = f"B dosyasında A'ya göre genel gürültü enerjisinde iyileşme/düşüş ({abs(diff_mean):.1f} dB) tespit edildi."
+            diag_comp_en = f"An improvement/decrease in overall noise energy ({abs(diff_mean):.1f} dB) was detected in File B compared to A."
         else:
             diag_comp_tr = "Her iki dosyanın spektrogram (zaman-frekans) enerji dağılımları büyük ölçüde benzerdir."
             diag_comp_en = "The spectrogram (time-frequency) energy distributions of both files are largely similar."
@@ -1003,7 +1059,7 @@ elif st.session_state.app_mode == "compare":
         )
         
         st.info(final_diag_text)
-        report_data["diagnostics"]["Color Map B"] = [
+        report_data["diagnostics"]["Color Map (B - Test)"] = [
             (f"A ({uploaded_files[0].name})", t(diag_A_tr, diag_A_en)),
             (f"B ({uploaded_files[1].name})", t(diag_B_tr, diag_B_en)),
             (t("KARŞILAŞTIRMA", "COMPARISON"), t(diag_comp_tr, diag_comp_en))
@@ -1051,7 +1107,7 @@ elif st.session_state.app_mode == "compare":
                 diag_B_tr, diag_B_en = f"{ord_B_dom}x (Tam Sayı) baskın. Spesifik parçaları inceleyin.", f"{ord_B_dom}x (Integer) dominant. Investigate specific parts."
 
             # Karşılaştırma Teşhisi
-            val_A = ord_df_A.loc[max_idx_B, "level_db_spl"] # B'nin zirve yaptığı noktadaki A'nın değeri
+            val_A = ord_df_A.loc[max_idx_B, "level_db_spl"] 
             val_B = ord_df_B.loc[max_idx_B, "level_db_spl"]
             diff = val_B - val_A
 
@@ -1099,20 +1155,20 @@ elif st.session_state.app_mode == "compare":
         color_A = "#28a745" if sii_pct_A >= 75 else "#ffc107" if sii_pct_A >= 45 else "#dc3545"
         color_B = "#28a745" if sii_pct_B >= 75 else "#ffc107" if sii_pct_B >= 45 else "#dc3545"
 
-        fig_gauge_comp.add_trace(go.Indicator(mode="gauge+number", value=sii_pct_A, title={'text': "SII A"},
-            gauge={'axis': {'range': [0, 100]}, 'bar': {'color': color_A}, 'steps': [{'range': [0, 45], 'color': '#ffcdd2'}, {'range': [45, 75], 'color': '#fff3cd'}, {'range': [75, 100], 'color': '#d4edda'}]}
+        fig_gauge_comp.add_trace(go.Indicator(mode="gauge+number", value=sii_pct_A, title={'text': "SII A"}, domain={'x': [0, 1], 'y': [0, 1]},
+            gauge={'axis': {'range': [0, 100], 'tickwidth': 1, 'tickcolor': "darkblue"}, 'bar': {'color': color_A}, 'bgcolor': "white", 'borderwidth': 2, 'bordercolor': "gray", 'steps': [{'range': [0, 45], 'color': 'rgba(220, 53, 69, 0.3)'}, {'range': [45, 75], 'color': 'rgba(255, 193, 7, 0.3)'}, {'range': [75, 100], 'color': 'rgba(40, 167, 69, 0.3)'}]}
         ), row=1, col=1)
-        fig_gauge_comp.add_trace(go.Indicator(mode="gauge+number", value=sii_pct_B, title={'text': "SII B"},
-            gauge={'axis': {'range': [0, 100]}, 'bar': {'color': color_B}, 'steps': [{'range': [0, 45], 'color': '#ffcdd2'}, {'range': [45, 75], 'color': '#fff3cd'}, {'range': [75, 100], 'color': '#d4edda'}]}
+        fig_gauge_comp.add_trace(go.Indicator(mode="gauge+number", value=sii_pct_B, title={'text': "SII B"}, domain={'x': [0, 1], 'y': [0, 1]},
+            gauge={'axis': {'range': [0, 100], 'tickwidth': 1, 'tickcolor': "darkblue"}, 'bar': {'color': color_B}, 'bgcolor': "white", 'borderwidth': 2, 'bordercolor': "gray", 'steps': [{'range': [0, 45], 'color': 'rgba(220, 53, 69, 0.3)'}, {'range': [45, 75], 'color': 'rgba(255, 193, 7, 0.3)'}, {'range': [75, 100], 'color': 'rgba(40, 167, 69, 0.3)'}]}
         ), row=1, col=2)
-        fig_gauge_comp.update_layout(height=350, margin=dict(t=50, b=30))
+        fig_gauge_comp.update_layout(height=400, margin=dict(t=50, b=30))
         st.plotly_chart(fig_gauge_comp, use_container_width=True)
         report_data["figures"]["SII Gauge"] = fig_gauge_comp
 
         fig_sii_bands = go.Figure()
-        fig_sii_bands.add_trace(go.Bar(x=[format_frequency(v) for v in sii_df_A["frequency_hz"]], y=100.0 * sii_df_A["contribution"], name="File A", marker_color="#1f77b4"))
-        fig_sii_bands.add_trace(go.Bar(x=[format_frequency(v) for v in sii_df_B["frequency_hz"]], y=100.0 * sii_df_B["contribution"], name="File B", marker_color="#E61A25"))
-        fig_sii_bands.update_layout(title="SII Katkısı (A vs B)", barmode='group', height=400, xaxis_type='category')
+        fig_sii_bands.add_trace(go.Bar(x=[format_frequency(v) for v in sii_df_A["frequency_hz"]], y=100.0 * sii_df_A["contribution"], name="File A", marker_color="#1f77b4", marker_line_color="#10446b", marker_line_width=1))
+        fig_sii_bands.add_trace(go.Bar(x=[format_frequency(v) for v in sii_df_B["frequency_hz"]], y=100.0 * sii_df_B["contribution"], name="File B", marker_color="#E61A25", marker_line_color="#B0101A", marker_line_width=1))
+        fig_sii_bands.update_layout(title="SII Katkısı (A vs B)", barmode='group', height=400, bargap=0.1, xaxis_type='category')
         st.plotly_chart(fig_sii_bands, use_container_width=True)
         report_data["figures"]["SII Bands"] = fig_sii_bands
 
@@ -1147,7 +1203,7 @@ elif st.session_state.app_mode == "compare":
         )
 
         st.info(final_diag_text)
-        report_data["diagnostics"]["SII"] = [
+        report_data["diagnostics"]["SII Gauge"] = [
             (f"A ({uploaded_files[0].name}) [SII: %{sii_pct_A:.1f}]", t(diag_A_tr, diag_A_en)),
             (f"B ({uploaded_files[1].name}) [SII: %{sii_pct_B:.1f}]", t(diag_B_tr, diag_B_en)),
             (t("KARŞILAŞTIRMA", "COMPARISON"), t(diag_comp_tr, diag_comp_en))
@@ -1159,9 +1215,9 @@ elif st.session_state.app_mode == "compare":
         oct_df_B = third_oct_B[third_oct_B["exact_hz"] <= max_display_frequency].copy()
         
         fig_oct_comp = go.Figure()
-        fig_oct_comp.add_trace(go.Bar(x=oct_df_A["nominal_hz"].map(format_frequency), y=oct_df_A["level_db_spl"], name="File A", marker_color="#1f77b4"))
-        fig_oct_comp.add_trace(go.Bar(x=oct_df_B["nominal_hz"].map(format_frequency), y=oct_df_B["level_db_spl"], name="File B", marker_color="#E61A25"))
-        fig_oct_comp.update_layout(title="1/3 Oktav Spektrumu (A vs B)", barmode='group', height=500, xaxis_type='category', xaxis_tickangle=-45)
+        fig_oct_comp.add_trace(go.Bar(x=oct_df_A["nominal_hz"].map(format_frequency), y=oct_df_A["level_db_spl"], name="File A", marker_color="#1f77b4", marker_line_color="#10446b", marker_line_width=1))
+        fig_oct_comp.add_trace(go.Bar(x=oct_df_B["nominal_hz"].map(format_frequency), y=oct_df_B["level_db_spl"], name="File B", marker_color="#E61A25", marker_line_color="#B0101A", marker_line_width=1))
+        fig_oct_comp.update_layout(title="1/3 Oktav Spektrumu (A vs B)", barmode='group', height=500, bargap=0.1, xaxis_type='category', xaxis_tickangle=-45)
         st.plotly_chart(fig_oct_comp, use_container_width=True)
         report_data["figures"]["1/3 Octave"] = fig_oct_comp
 
@@ -1205,7 +1261,6 @@ elif st.session_state.app_mode == "compare":
 
         st.info(final_diag_text)
         
-        # PDF için tablo yapısında veri kaydedelim
         report_data["diagnostics"]["1/3 Octave"] = [
             (f"A ({uploaded_files[0].name})", t(diag_A_tr, diag_A_en)),
             (f"B ({uploaded_files[1].name})", t(diag_B_tr, diag_B_en)),
