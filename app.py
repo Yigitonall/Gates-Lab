@@ -107,8 +107,8 @@ if PDF_ENABLED:
                 self.rect(10, 10, 190, 2, 'F')
                 
                 try:
-                    # Logoyu taşırmamak için aspect-ratio korunarak yükseklik 14mm yapıldı
-                    self.image("gates_logo.png", x=11, y=13, w=0, h=14)
+                    # PDF İçin Güncellenmiş Siyah Logo
+                    self.image("gatessiyah_logo.png", x=11, y=13, w=0, h=14)
                 except:
                     self.set_font("Arial", 'B', 14)
                     self.set_xy(11, 16)
@@ -170,7 +170,8 @@ if PDF_ENABLED:
         # Logo ve Rapor Numarası Bloğu (H: 22mm)
         pdf.rect(10, 14, 190, 22)
         try:
-            pdf.image("gates_logo.png", x=12, y=17, w=0, h=16)
+            # PDF İçin Güncellenmiş Siyah Logo
+            pdf.image("gatessiyah_logo.png", x=12, y=17, w=0, h=16)
         except:
             pdf.set_font("Arial", 'B', 16)
             pdf.set_xy(12, 20)
