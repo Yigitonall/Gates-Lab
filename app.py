@@ -96,7 +96,7 @@ if st.session_state.app_mode is None:
     .landing-title { text-align: center; color: #252525 !important; font-size: 3rem !important; margin-bottom: 0.5rem; font-weight: bold; white-space: nowrap; }
     .landing-subtitle { text-align: center; color: #555555; font-size: 1.2rem; margin-bottom: 3rem; }
     [data-testid="stAppViewContainer"] > .block-container { 
-        padding-top: 52vh !important; 
+        padding-top: 66vh !important; 
         max-width: 1200px !important;
     }
     </style>
