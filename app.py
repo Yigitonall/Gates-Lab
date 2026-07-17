@@ -106,31 +106,34 @@ if PDF_ENABLED:
             if self.page_no() > 1:
                 self.set_line_width(0.5)
                 
-                # Kırmızı üst şerit (Çerçevenin dışına taşmasın diye daraltıldı)
+                # Kırmızı üst şerit (Çerçevenin iç kenarına hizalandı)
                 self.set_fill_color(200, 0, 0)
-                self.rect(10, 10, 190, 2, 'F')
+                self.rect(10.25, 10.25, 189.5, 2, 'F')
+                
+                # Dış Çerçeve
+                self.rect(10, 10, 190, 24)
                 
                 # Logo alanı (Siyah-Beyaz Logo)
                 try:
-                    self.image("gatessiyah_logo.png", x=10, y=14, w=0, h=14)
+                    self.image("gatessiyah_logo.png", x=12, y=14, w=0, h=14)
                 except:
                     self.set_font("Arial", 'B', 20)
-                    self.set_xy(10, 16)
+                    self.set_xy(12, 18)
                     self.cell(40, 10, "GATES")
                     
                 # Ortada Report Yazısı
                 self.set_font("Arial", 'B', 18)
-                self.set_xy(80, 16)
+                self.set_xy(80, 17)
                 self.cell(50, 10, "Report", align='C')
                 
                 # Sağda Report-No
                 self.set_font("Arial", 'B', 10)
-                self.set_xy(140, 16)
-                self.cell(60, 6, clean_text_for_fpdf(f"Report-No.: {self.antet_data.get('report_no', '')}"), align='R')
+                self.set_xy(140, 14)
+                self.cell(58, 6, clean_text_for_fpdf(f"Report-No.: {self.antet_data.get('report_no', '')}"), align='R')
                 
                 # Alt gri şerit
                 self.set_fill_color(240, 240, 240)
-                self.rect(10, 32, 190, 3, 'F')
+                self.rect(10.25, 30, 189.5, 4, 'F')
                 
                 # Grafikler antete binmesin diye y-koordinatını aşağı kaydırıyoruz
                 self.set_y(40)
@@ -156,9 +159,14 @@ if PDF_ENABLED:
             valid_text = "This document was created electronically and is valid without signature."
             combined_text = f"{path_text}\n{valid_text}"
             
-            # Yazıyı dikey olarak mükemmel ortalamak için hafif boşluk bırakıyoruz
-            self.set_xy(box_x, box_y + 2)
-            self.multi_cell(160, 5, combined_text, align='C')
+            # Yazıyı dikey olarak mükemmel ortalamak için matematiksel hesaplama
+            num_lines = len(combined_text.split('\n'))
+            line_height = 4
+            text_total_height = num_lines * line_height
+            start_y = box_y + (box_h - text_total_height) / 2
+            
+            self.set_xy(box_x, start_y)
+            self.multi_cell(160, line_height, combined_text, align='C')
             
             # Sağ bölüm - Sayfa Numarası
             self.set_xy(box_x + 160, box_y)
@@ -174,16 +182,16 @@ if PDF_ENABLED:
         pdf.set_line_width(0.5)
         
         # --- ÖNCE DOLGULAR (FILL) ÇİZİLİYOR ---
-        # Kırmızı üst şerit
+        # Kırmızı üst şerit (İç kısımdan başlatıldı)
         pdf.set_fill_color(200, 0, 0)
         pdf.rect(10.25, 10.25, 189.5, 2, 'F')
         
-        # Gri Şerit (36'dan 40'a kadar)
+        # Gri Şerit
         pdf.set_fill_color(240, 240, 240)
         pdf.rect(10.25, 36, 189.5, 4, 'F')
         
         # --- SONRA ÇİZGİLER (BORDER) ÇİZİLİYOR ---
-        # Logo ve Rapor Numarası Bloğu (H: 30mm) - 40'a kadar uzatıldı
+        # Logo ve Rapor Numarası Bloğu (H: 30mm)
         pdf.rect(10, 10, 190, 30)
         
         # Logo alanı (Siyah Logomuz)
@@ -213,10 +221,10 @@ if PDF_ENABLED:
         
         # Date & Location Bloğu (H: 8mm)
         pdf.rect(10, 52, 190, 8)
-        # Dikey çizgiler
+        # Dikey çizgiler (Hizalama referanslarına göre ayarlandı)
         pdf.line(125, 52, 125, 60) # Location ayracı
         pdf.line(42, 52, 42, 60)   # Date değer ayracı
-        pdf.line(152, 52, 152, 60) # Location değer ayracı (148'den 152'ye kaydırıldı)
+        pdf.line(152, 52, 152, 60) # Location değer ayracı
         
         pdf.set_font("Arial", '', 10)
         pdf.set_xy(11, 53)
@@ -234,7 +242,7 @@ if PDF_ENABLED:
         # Dikey çizgiler
         pdf.line(125, 60, 125, 76) # Department ayracı
         pdf.line(42, 60, 42, 76)   # Author değer ayracı
-        pdf.line(152, 60, 152, 76) # Department değer ayracı (148'den 152'ye kaydırıldı)
+        pdf.line(152, 60, 152, 76) # Department değer ayracı
         
         pdf.set_font("Arial", '', 10)
         pdf.set_xy(11, 62)
@@ -301,7 +309,7 @@ if PDF_ENABLED:
                     if "SII" in report_data["diagnostics"]:
                         pdf.ln(5)
                         pdf.set_font("Arial", '', 11)
-                        diag_text = "Diagnosis / Teshis: " + report_data["diagnostics"]["SII"]
+                        diag_text = t("Teshis: ", "Diagnosis: ") + report_data["diagnostics"]["SII"]
                         pdf.multi_cell(0, 6, clean_text_for_fpdf(diag_text))
                     
                     drawn_sii_page = True
@@ -328,7 +336,7 @@ if PDF_ENABLED:
                     
                     if diag_key in report_data["diagnostics"]:
                         pdf.set_font("Arial", '', 11)
-                        diag_text = "Diagnosis / Teshis: " + report_data["diagnostics"][diag_key]
+                        diag_text = t("Teshis: ", "Diagnosis: ") + report_data["diagnostics"][diag_key]
                         pdf.multi_cell(0, 6, clean_text_for_fpdf(diag_text))
                         pdf.ln(10)
         
@@ -566,9 +574,11 @@ if st.sidebar.button(t("🚀 Analiz Yap", "🚀 Run Analysis"), type="primary", 
 # ============================================================
 # PDF DİALOG MODÜLÜ (POP-UP)
 # ============================================================
-@st.dialog("📄 PDF Rapor Bilgilerini Girin")
+@st.dialog(t("📄 PDF Rapor Bilgilerini Girin", "📄 Enter PDF Report Information"))
 def pdf_info_dialog(report_data):
-    st.write("Lütfen raporun ilk sayfasındaki antette görünecek bilgileri doldurun.")
+    st.write(t("Lütfen raporun ilk sayfasındaki antette görünecek bilgileri doldurun.", 
+               "Please fill in the information that will appear in the header on the first page of the report."))
+    
     col1, col2 = st.columns(2)
     with col1:
         subject = st.text_input("Subject:", value="Customer return inspection")
@@ -580,9 +590,9 @@ def pdf_info_dialog(report_data):
         department = st.text_area("Department:", value="S.Cankul\nTest Lab. Supervisor\nEngineering ESPT – EMEA", height=100)
         
     distribution = st.text_input("Distribution list:", value="Torsten Paluszek")
-    file_path = st.text_input("File Path (Bottom Footer):", value=r"N:\Engineering\Internal\Working_Folders\18_TEST\03 Test Report Preparation\1) WORD TEST REPORTS\3 CUSTOMER RETURN\E4119\06.07.2026 - 2\E4119 R0010 J-2603055.docx")
+    file_path = st.text_input(t("Dosya Yolu (Alt Footer):", "File Path (Bottom Footer):"), value=r"N:\Engineering\Internal\Working_Folders\18_TEST\03 Test Report Preparation\1) WORD TEST REPORTS\3 CUSTOMER RETURN\E4119\06.07.2026 - 2\E4119 R0010 J-2603055.docx")
     
-    if st.button("✅ Raporu Oluştur", use_container_width=True):
+    if st.button(t("✅ Raporu Oluştur", "✅ Generate Report"), use_container_width=True):
         antet_data = {
             "subject": subject,
             "date": date_val,
@@ -593,14 +603,15 @@ def pdf_info_dialog(report_data):
             "distribution": distribution,
             "file_path": file_path
         }
-        with st.spinner("PDF oluşturuluyor, grafikler işleniyor (Lütfen bekleyin)..."):
+        with st.spinner(t("PDF oluşturuluyor, grafikler işleniyor (Lütfen bekleyin)...", "Generating PDF, processing charts (Please wait)...")):
             try:
                 pdf_bytes = build_pdf_report(report_data, antet_data)
                 st.session_state["pdf_bytes"] = pdf_bytes
                 st.session_state.pdf_ready = True
                 st.rerun()
             except Exception as e:
-                st.error(f"PDF Oluşturma Hatası: {e}\n\nLütfen terminalinizde 'pip install fpdf2 kaleido' kütüphanelerinin yüklü olduğundan emin olun.")
+                st.error(t(f"PDF Oluşturma Hatası: {e}\n\nLütfen terminalinizde 'pip install fpdf2 kaleido' kütüphanelerinin yüklü olduğundan emin olun.", 
+                           f"PDF Generation Error: {e}\n\nPlease make sure 'pip install fpdf2 kaleido' libraries are installed in your terminal."))
 
 # ============================================================
 # ANA AKIŞ VE HESAPLAMALAR
@@ -659,17 +670,27 @@ with tab_color:
 
     report_data["figures"]["Color Map"] = fig_color
 
-    st.markdown("### 🤖 Akıllı Teşhis (Auto-Interpretation)")
+    st.markdown(t("### 🤖 Akıllı Teşhis", "### 🤖 Auto-Interpretation"))
     db_matrix = spec_level_db[frequency_mask, :]
     time_variance = np.var(np.mean(db_matrix, axis=0))
     freq_variance = np.var(np.mean(db_matrix, axis=1))
 
-    if time_variance > freq_variance * 1.5: diag_tr = "Spektrogramda zamana bağlı ani enerji değişimleri (Dikey izler) tespit edildi. Muhtemel Kök Neden: **Anlık vuruntular, metal çarpması veya darbe (Impact) gürültüsü**."
-    elif freq_variance > time_variance * 1.5: diag_tr = "Spektrogramda belirli frekans bantlarında yoğunlaşma (Yatay bantlar) tespit edildi. Muhtemel Kök Neden: **Dönen parçalardan kaynaklı sürekli inilti, sürtünme veya harmonik gürültü**."
-    else: diag_tr = "Spektrogramda hem zamana hem de frekansa yayılan karmaşık bir gürültü profili gözlemleniyor. Karmaşık (Geniş bantlı) titreşimler incelenmelidir."
+    if time_variance > freq_variance * 1.5: 
+        diag_tr = "Spektrogramda zamana bağlı ani enerji değişimleri (Dikey izler) tespit edildi. Muhtemel Kök Neden: **Anlık vuruntular, metal çarpması veya darbe (Impact) gürültüsü**."
+        diag_en = "Sudden time-dependent energy changes (Vertical traces) detected in the spectrogram. Probable Root Cause: **Instantaneous knocks, metal clashing, or impact noise**."
+    elif freq_variance > time_variance * 1.5: 
+        diag_tr = "Spektrogramda belirli frekans bantlarında yoğunlaşma (Yatay bantlar) tespit edildi. Muhtemel Kök Neden: **Dönen parçalardan kaynaklı sürekli inilti, sürtünme veya harmonik gürültü**."
+        diag_en = "Concentration in specific frequency bands (Horizontal bands) detected in the spectrogram. Probable Root Cause: **Continuous whine, friction, or harmonic noise caused by rotating parts**."
+    else: 
+        diag_tr = "Spektrogramda hem zamana hem de frekansa yayılan karmaşık bir gürültü profili gözlemleniyor. Karmaşık (Geniş bantlı) titreşimler incelenmelidir."
+        diag_en = "A complex noise profile spreading across both time and frequency is observed. Complex (Broadband) vibrations should be investigated."
     
-    st.info(t(f"💡 **Bulgu:** Sinyalin zaman ve frekans eksenindeki enerji dağılım varyansı analiz edildi.\n\n🔍 **Teşhis:** {diag_tr}", f"🔍 **Diagnosis:** {diag_tr}"))
-    report_data["diagnostics"]["Color Map"] = diag_tr
+    diag_final = t(diag_tr, diag_en)
+    info_tr = f"💡 **Bulgu:** Sinyalin zaman ve frekans eksenindeki enerji dağılım varyansı analiz edildi.\n\n🔍 **Teşhis:** {diag_final}"
+    info_en = f"💡 **Finding:** The energy distribution variance of the signal in time and frequency axes was analyzed.\n\n🔍 **Diagnosis:** {diag_final}"
+    
+    st.info(t(info_tr, info_en))
+    report_data["diagnostics"]["Color Map"] = diag_final
 
 # ============================================================
 # TAB 2 — ORDER PLOTS
@@ -699,19 +720,31 @@ with tab_order:
         st.plotly_chart(fig_order, use_container_width=True)
         report_data["figures"]["Order Plot"] = fig_order
 
-        st.markdown("### 🤖 Akıllı Teşhis (Auto-Interpretation)")
+        st.markdown(t("### 🤖 Akıllı Teşhis", "### 🤖 Auto-Interpretation"))
         if harmonic_x and harmonic_y:
             max_idx = np.argmax(harmonic_y)
             dominant_order = harmonic_x[max_idx]
             max_db = harmonic_y[max_idx]
             
-            if abs(dominant_order - 1.0) < 0.1: diag_tr = "Sistemde **1x (1. Mertebe)** seviyesi baskın. Muhtemel Kök Neden: **Ana şaftta Balanssızlık (Unbalance)**."
-            elif abs(dominant_order - 2.0) < 0.1: diag_tr = "Sistemde **2x (2. Mertebe)** seviyesi baskın. Muhtemel Kök Neden: **Kaplin/Şaft Eksen Kaçıklığı veya Gevşeklik (Misalignment / Looseness)**."
-            elif dominant_order % 1 != 0: diag_tr = f"Sistemde **{dominant_order}x (Küsuratlı Mertebe)** seviyesi baskın. Muhtemel Kök Neden: **Rulman arızası (Bearing defect) veya Kayış Kayması (Belt Slip)**."
-            else: diag_tr = f"Sistemde **{dominant_order}x (Yüksek Tam Sayı)** seviyesi baskın. Belirli kanat/diş sayısına sahip spesifik parçalar incelenmelidir."
+            if abs(dominant_order - 1.0) < 0.1: 
+                diag_tr = "Sistemde **1x (1. Mertebe)** seviyesi baskın. Muhtemel Kök Neden: **Ana şaftta Balanssızlık (Unbalance)**."
+                diag_en = "**1x (1st Order)** level is dominant in the system. Probable Root Cause: **Main shaft Unbalance**."
+            elif abs(dominant_order - 2.0) < 0.1: 
+                diag_tr = "Sistemde **2x (2. Mertebe)** seviyesi baskın. Muhtemel Kök Neden: **Kaplin/Şaft Eksen Kaçıklığı veya Gevşeklik (Misalignment / Looseness)**."
+                diag_en = "**2x (2nd Order)** level is dominant in the system. Probable Root Cause: **Coupling/Shaft Misalignment or Looseness**."
+            elif dominant_order % 1 != 0: 
+                diag_tr = f"Sistemde **{dominant_order}x (Küsuratlı Mertebe)** seviyesi baskın. Muhtemel Kök Neden: **Rulman arızası (Bearing defect) veya Kayış Kayması (Belt Slip)**."
+                diag_en = f"**{dominant_order}x (Fractional Order)** level is dominant. Probable Root Cause: **Bearing defect or Belt Slip**."
+            else: 
+                diag_tr = f"Sistemde **{dominant_order}x (Yüksek Tam Sayı)** seviyesi baskın. Belirli kanat/diş sayısına sahip spesifik parçalar incelenmelidir."
+                diag_en = f"**{dominant_order}x (High Integer Order)** level is dominant. Specific parts with a matching number of blades/teeth should be investigated."
 
-            st.info(t(f"💡 **Bulgu:** En yüksek tepe noktası {max_db:.1f} dB ile {dominant_order}x mertebesinde tespit edildi.\n\n🔍 **Teşhis:** {diag_tr}", f"🔍 **Diagnosis:** {diag_tr}"))
-            report_data["diagnostics"]["Order Plot"] = diag_tr
+            diag_final = t(diag_tr, diag_en)
+            info_tr = f"💡 **Bulgu:** En yüksek tepe noktası {max_db:.1f} dB ile {dominant_order}x mertebesinde tespit edildi.\n\n🔍 **Teşhis:** {diag_final}"
+            info_en = f"💡 **Finding:** The highest peak was detected at order {dominant_order}x with {max_db:.1f} dB.\n\n🔍 **Diagnosis:** {diag_final}"
+            
+            st.info(t(info_tr, info_en))
+            report_data["diagnostics"]["Order Plot"] = diag_final
 
     else:
         if rpm_dataframe is None: st.warning(t("Değişken RPM analizi için CSV yükleyin.", "Upload a CSV for variable RPM."))
@@ -793,13 +826,23 @@ with tab_ai:
         st.plotly_chart(fig_contribution, use_container_width=True)
         report_data["figures"]["SII Bands"] = fig_contribution
 
-    st.markdown("### 🤖 Akıllı Teşhis (Auto-Interpretation)")
-    if sii_percent >= 75: diag_tr = "Makine çalışma gürültüsü, insan iletişimini engellemiyor. İş güvenliği açısından **%100 güvenli ve konforlu bölge**."
-    elif sii_percent >= 45: diag_tr = "Makine gürültüsü konuşmaları kısmen maskeliyor. Etkili iletişim kurmak için personelin **ses yükseltmesi gerekebilir**."
-    else: diag_tr = "Makine gürültüsü insan sesini tamamen yutuyor. Operatörler için **kulaklık/yalıtım kesinlikle zorunludur**."
+    st.markdown(t("### 🤖 Akıllı Teşhis", "### 🤖 Auto-Interpretation"))
+    if sii_percent >= 75: 
+        diag_tr = "Makine çalışma gürültüsü, insan iletişimini engellemiyor. İş güvenliği açısından **%100 güvenli ve konforlu bölge**."
+        diag_en = "Machine operating noise does not hinder human communication. **100% safe and comfortable zone** in terms of occupational safety."
+    elif sii_percent >= 45: 
+        diag_tr = "Makine gürültüsü konuşmaları kısmen maskeliyor. Etkili iletişim kurmak için personelin **ses yükseltmesi gerekebilir**."
+        diag_en = "Machine noise partially masks conversations. Personnel **may need to raise their voice** to communicate effectively."
+    else: 
+        diag_tr = "Makine gürültüsü insan sesini tamamen yutuyor. Operatörler için **kulaklık/yalıtım kesinlikle zorunludur**."
+        diag_en = "Machine noise completely swallows the human voice. **Headsets/insulation are absolutely mandatory** for operators."
     
-    st.info(t(f"💡 **Bulgu:** SII Değeri %{sii_percent:.1f}.\n\n🔍 **Teşhis:** {diag_tr}", f"🔍 **Diagnosis:** {diag_tr}"))
-    report_data["diagnostics"]["SII"] = diag_tr
+    diag_final = t(diag_tr, diag_en)
+    info_tr = f"💡 **Bulgu:** SII Değeri %{sii_percent:.1f}.\n\n🔍 **Teşhis:** {diag_final}"
+    info_en = f"💡 **Finding:** SII Score is {sii_percent:.1f}%.\n\n🔍 **Diagnosis:** {diag_final}"
+    
+    st.info(t(info_tr, info_en))
+    report_data["diagnostics"]["SII"] = diag_final
 
 # ============================================================
 # TAB 4 — 1/3 OCTAVE BAND PLOTS
@@ -827,7 +870,7 @@ with tab_octave:
     st.plotly_chart(fig_octave, use_container_width=True)
     report_data["figures"]["1/3 Octave"] = fig_octave
 
-    st.markdown("### 🤖 Akıllı Teşhis (Auto-Interpretation)")
+    st.markdown(t("### 🤖 Akıllı Teşhis", "### 🤖 Auto-Interpretation"))
     low_freq_mask = (octave_plot_df["nominal_hz"] >= 20) & (octave_plot_df["nominal_hz"] <= 250)
     high_freq_mask = (octave_plot_df["nominal_hz"] >= 2000) & (octave_plot_df["nominal_hz"] <= 10000)
     
@@ -837,12 +880,22 @@ with tab_octave:
     low_db_total = 10 * np.log10(low_power) if low_power > 0 else 0
     high_db_total = 10 * np.log10(high_power) if high_power > 0 else 0
 
-    if low_db_total > high_db_total + 5: diag_tr = "Spektrumun sol tarafı baskın. **Yapısal titreşimler, balanssızlık veya kalın uğultu (rumble)** sorunları ön planda."
-    elif high_db_total > low_db_total + 5: diag_tr = "Spektrumun sağ tarafı baskın. **Sürtünme, keçe deformasyonu veya tiz ıslık/whine** sorunları ön planda."
-    else: diag_tr = "Gürültü enerjisi düşük ve yüksek frekanslar arasında dengeli dağılmış (Geniş bantlı gürültü karakteristiği)."
+    if low_db_total > high_db_total + 5: 
+        diag_tr = "Spektrumun sol tarafı baskın. **Yapısal titreşimler, balanssızlık veya kalın uğultu (rumble)** sorunları ön planda."
+        diag_en = "Left side of the spectrum is dominant. **Structural vibrations, unbalance, or deep rumble** issues are prominent."
+    elif high_db_total > low_db_total + 5: 
+        diag_tr = "Spektrumun sağ tarafı baskın. **Sürtünme, keçe deformasyonu veya tiz ıslık/whine** sorunları ön planda."
+        diag_en = "Right side of the spectrum is dominant. **Friction, seal deformation, or high-pitched whistle/whine** issues are prominent."
+    else: 
+        diag_tr = "Gürültü enerjisi düşük ve yüksek frekanslar arasında dengeli dağılmış (Geniş bantlı gürültü karakteristiği)."
+        diag_en = "Noise energy is evenly distributed between low and high frequencies (Broadband noise characteristic)."
 
-    st.info(t(f"📊 **Enerji Dağılımı:** Düşük Frekans Toplamı: {low_db_total:.1f} dB | Yüksek Frekans Toplamı: {high_db_total:.1f} dB\n\n🔍 **Teşhis:** {diag_tr}", f"🔍 **Diagnosis:** {diag_tr}"))
-    report_data["diagnostics"]["1/3 Octave"] = diag_tr
+    diag_final = t(diag_tr, diag_en)
+    info_tr = f"📊 **Enerji Dağılımı:** Düşük Frekans Toplamı: {low_db_total:.1f} dB | Yüksek Frekans Toplamı: {high_db_total:.1f} dB\n\n🔍 **Teşhis:** {diag_final}"
+    info_en = f"📊 **Energy Distribution:** Low Freq Total: {low_db_total:.1f} dB | High Freq Total: {high_db_total:.1f} dB\n\n🔍 **Diagnosis:** {diag_final}"
+
+    st.info(t(info_tr, info_en))
+    report_data["diagnostics"]["1/3 Octave"] = diag_final
 
 # ============================================================
 # PDF BUTONLARI (YAN MENÜ ALT KISIM)
