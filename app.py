@@ -486,6 +486,30 @@ with tab_order:
     except Exception as e:
         st.error(t(f"Order analizi yapılırken hata oluştu: {e}", f"Error during Order analysis: {e}"))
 
+# --- ORDER PLOT OTOMATİK YORUMLAMA (SMART DIAGNOSTICS) ---
+st.markdown("### 🤖 Akıllı Teşhis (Auto-Interpretation)")
+if harmonic_x and harmonic_y:
+    # En yüksek dB seviyesine sahip mertebeyi bul
+    max_idx = np.argmax(harmonic_y)
+    dominant_order = harmonic_x[max_idx]
+    max_db = harmonic_y[max_idx]
+    
+    if abs(dominant_order - 1.0) < 0.1:
+        diag_tr = "Sistemde **1x (1. Mertebe)** seviyesi baskın. Muhtemel Kök Neden: **Ana şaftta Balanssızlık (Unbalance)**."
+        diag_en = "The **1x Order** is dominant. Probable Root Cause: **Main shaft Unbalance**."
+    elif abs(dominant_order - 2.0) < 0.1:
+        diag_tr = "Sistemde **2x (2. Mertebe)** seviyesi baskın. Muhtemel Kök Neden: **Kaplin/Şaft Eksen Kaçıklığı veya Gevşeklik (Misalignment / Looseness)**."
+        diag_en = "The **2x Order** is dominant. Probable Root Cause: **Coupling/Shaft Misalignment or Looseness**."
+    elif dominant_order % 1 != 0: # Küsuratlı ise (Örn: 2.5x, 3.8x)
+        diag_tr = f"Sistemde **{dominant_order}x (Küsuratlı Mertebe)** seviyesi baskın. Muhtemel Kök Neden: **Rulman arızası (Bearing defect) veya Kayış Kayması (Belt Slip)**."
+        diag_en = f"The **{dominant_order}x (Fractional Order)** is dominant. Probable Root Cause: **Bearing defect or Belt Slip**."
+    else:
+        diag_tr = f"Sistemde **{dominant_order}x (Yüksek Tam Sayı)** seviyesi baskın. Analiz: Bu frekansı üreten spesifik bir parça (örn: {int(dominant_order)} kanatlı fan veya kasnak) incelenmelidir."
+        diag_en = f"The **{dominant_order}x (High Integer Order)** is dominant. Analysis: Inspect specific components matching this count (e.g., a {int(dominant_order)}-blade fan)."
+
+    st.info(t(f"💡 **Bulgu:** En yüksek tepe noktası {max_db:.1f} dB ile {dominant_order}x mertebesinde tespit edildi.\n\n🔍 **Teşhis:** {diag_tr}", 
+              f"💡 **Finding:** The highest peak was detected at {dominant_order}x order with {max_db:.1f} dB.\n\n🔍 **Diagnosis:** {diag_en}"))
+
 # ============================================================
 # TAB 3 — ARTICULATION INDEX / SII
 # ============================================================
