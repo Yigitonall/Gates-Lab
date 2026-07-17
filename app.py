@@ -27,61 +27,23 @@ st.set_page_config(
     layout="wide",
 )
 
-# CSS Enjeksiyonu: navigates.gates.com Tasarım Dili
+# CSS Enjeksiyonu
 st.markdown("""
 <style>
-    /* Genel Arka Plan ve Ana Metin Rengi */
-    .stApp {
-        background-color: #FFFFFF;
-        color: #212529;
-        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-    }
-    
-    /* Yan Menü (Sidebar) Teması - Açık Gri */
-    [data-testid="stSidebar"] {
-        background-color: #F0F0F0;
-        border-right: 1px solid #C8C8C8;
-    }
-    [data-testid="stSidebar"] * {
-        color: #212529;
-    }
-    
-    /* Ana Başlıklar - Koyu Antrasit */
-    h1, h2, h3, h4 {
-        color: #141412 !important;
-        font-weight: 700 !important;
-    }
-    
-    /* Sekmeler (Tabs) Teması - Seçili Sekme Gates Kırmızısı */
-    .stTabs [data-baseweb="tab-list"] {
-        border-bottom: 2px solid #E0E0E0;
-    }
-    .stTabs [aria-selected="true"] {
-        border-bottom-color: #E61A25 !important;
-        border-bottom-width: 3px !important;
-    }
-    .stTabs [aria-selected="true"] p {
-        color: #E61A25 !important;
-        font-weight: bold;
-    }
-    
-    /* Yükleme Butonları ve Etkileşimli Alanlar */
-    div[data-testid="stFileUploader"] > section {
-        border-color: #C8C8C8;
-        background-color: #F9F9F9;
-    }
-    
-    /* Uyarı ve Bilgi Kutuları */
-    div[data-testid="stAlert"] {
-        background-color: #F0F0F0;
-        color: #212529;
-        border-left: 5px solid #E61A25;
-    }
+    .stApp { background-color: #FFFFFF; color: #212529; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; }
+    [data-testid="stSidebar"] { background-color: #F0F0F0; border-right: 1px solid #C8C8C8; }
+    [data-testid="stSidebar"] * { color: #212529; }
+    h1, h2, h3, h4 { color: #141412 !important; font-weight: 700 !important; }
+    .stTabs [data-baseweb="tab-list"] { border-bottom: 2px solid #E0E0E0; }
+    .stTabs [aria-selected="true"] { border-bottom-color: #E61A25 !important; border-bottom-width: 3px !important; }
+    .stTabs [aria-selected="true"] p { color: #E61A25 !important; font-weight: bold; }
+    div[data-testid="stFileUploader"] > section { border-color: #C8C8C8; background-color: #F9F9F9; }
+    div[data-testid="stAlert"] { background-color: #F0F0F0; color: #212529; border-left: 5px solid #E61A25; }
 </style>
 """, unsafe_allow_html=True)
 
 # ============================================================
-# DİL SEÇİMİ VE ÇEVİRİ MOTORU (BILINGUAL SUPPORT)
+# DİL SEÇİMİ VE ÇEVİRİ MOTORU
 # ============================================================
 try:
     st.sidebar.image("gates_logo.png", use_container_width=True)
@@ -92,13 +54,10 @@ lang_choice = st.sidebar.radio("🌐 Language / Dil", ["Türkçe", "English"], h
 lang = "tr" if lang_choice == "Türkçe" else "en"
 
 def t(tr_text: str, en_text: str) -> str:
-    """Seçili dile göre metni döndüren çeviri fonksiyonu."""
     return tr_text if lang == "tr" else en_text
 
 st.title(t("🔊 Gürültü ve Akustik Analiz Sistemi (NVH)", "🔊 Noise and Acoustic Analysis System (NVH)"))
-st.caption(
-    "COLOR MAPS • ORDER PLOTS • ARTICULATION INDEX / SII • 1/3 OCTAVE BAND PLOTS"
-)
+st.caption("COLOR MAPS • ORDER PLOTS • ARTICULATION INDEX / SII • 1/3 OCTAVE BAND PLOTS")
 
 # ============================================================
 # AKIŞ KONTROLÜ (SESSION STATE)
@@ -116,14 +75,7 @@ def reset_analysis():
 # AKUSTİK STANDARTLAR VE SABİTLER
 # ============================================================
 EPS = np.finfo(float).tiny
-
-THIRD_OCTAVE_NOMINAL = np.array(
-    [20, 25, 31.5, 40, 50, 63, 80, 100, 125, 160,
-     200, 250, 315, 400, 500, 630, 800, 1000, 1250,
-     1600, 2000, 2500, 3150, 4000, 5000, 6300, 8000,
-     10000, 12500, 16000, 20000], dtype=float
-)
-
+THIRD_OCTAVE_NOMINAL = np.array([20, 25, 31.5, 40, 50, 63, 80, 100, 125, 160, 200, 250, 315, 400, 500, 630, 800, 1000, 1250, 1600, 2000, 2500, 3150, 4000, 5000, 6300, 8000, 10000, 12500, 16000, 20000], dtype=float)
 SII_OCTAVE_FREQS = np.array([250, 500, 1000, 2000, 4000, 8000], dtype=float)
 SII_BANDWIDTH_ADJUSTMENT = np.array([22.48, 25.48, 28.48, 31.48, 34.48, 37.48], dtype=float)
 SII_IMPORTANCE = np.array([0.0617, 0.1671, 0.2373, 0.2648, 0.2142, 0.0549], dtype=float)
@@ -131,186 +83,220 @@ SII_INTERNAL_NOISE = np.array([-3.9, -9.7, -12.5, -17.7, -25.9, -7.1], dtype=flo
 SII_NORMAL_SPEECH = np.array([34.75, 34.27, 25.01, 17.32, 9.33, 1.13], dtype=float)
 
 # ============================================================
-# PDF VE ANTET İÇİN YARDIMCI FONKSİYONLAR
+# PDF İÇİN YARDIMCI FONKSİYONLAR VE CUSTOM SINIF
 # ============================================================
 def clean_text_for_fpdf(txt):
     if not isinstance(txt, str): return str(txt)
     tr_map = {'ç':'c', 'ğ':'g', 'ı':'i', 'ö':'o', 'ş':'s', 'ü':'u', 'Ç':'C', 'Ğ':'G', 'İ':'I', 'Ö':'O', 'Ş':'S', 'Ü':'U'}
-    for tr, eng in tr_map.items(): txt = txt.replace(tr, eng)
+    for tr, eng in tr_map.items():
+        txt = txt.replace(tr, eng)
     txt = txt.replace("**", "") 
     return txt.encode('latin-1', 'ignore').decode('latin-1')
 
-if PDF_ENABLED:
-    class GatesPDF(FPDF):
-        def __init__(self, antet_data=None, *args, **kwargs):
-            super().__init__(*args, **kwargs)
-            self.antet_data = antet_data
-
-        def header(self):
-            # Sadece 1. sayfadan sonraki sayfalarda bu basit anteti göster
-            if self.page_no() > 1 and self.antet_data:
-                # Kırmızı üst şerit
-                self.set_fill_color(200, 0, 0)
-                self.rect(10, 10, 190, 2, 'F')
-                
-                # Logo alanı
-                try:
-                    # Logoyu yüksekliğe (h=14) göre sınırla ki alt veya üst şeride taşmasın
-                    self.image("gates_logo.png", x=11, y=13, w=0, h=14)
-                except:
-                    self.set_font("Arial", 'B', 14)
-                    self.set_xy(11, 16)
-                    self.cell(35, 10, "GATES")
-                    
-                # Ortada Report Yazısı
-                self.set_font("Arial", 'B', 16)
-                self.set_xy(10, 16)
-                self.cell(190, 10, "Report", align='C')
-                
-                # Sağ üstte Report-No
-                self.set_font("Arial", 'B', 10)
-                self.set_xy(10, 14)
-                self.cell(188, 5, clean_text_for_fpdf(f"Report-No.: {self.antet_data.get('report_no', '')}"), align='R')
-                
-                # Gri desenli alt çizgi
-                self.set_fill_color(240, 240, 240)
-                self.rect(10, 28, 190, 3, 'F')
-                
-                # İçerik için aşağıya kaydır
-                self.ln(25)
-
-def build_pdf_report(report_data, antet_data=None):
-    if not PDF_ENABLED:
-        return b""
+class GatesReport(FPDF):
+    def __init__(self, antet_data):
+        super().__init__()
+        self.antet_data = antet_data
         
-    pdf = GatesPDF(antet_data=antet_data)
-    pdf.set_auto_page_break(auto=True, margin=15)
+    def header(self):
+        # Sadece 1. sayfadan sonraki sayfalarda bu basit anteti göster
+        if self.page_no() > 1 and self.antet_data:
+            # Kırmızı üst şerit
+            self.set_fill_color(200, 0, 0)
+            self.rect(10, 10, 190, 2, 'F')
+            
+            # Logo alanı
+            try:
+                self.image("gates_logo.png", x=11, y=13, w=0, h=14)
+            except:
+                self.set_font("Arial", 'B', 14)
+                self.set_xy(11, 16)
+                self.cell(35, 10, "GATES")
+                
+            # Ortada Report Yazısı
+            self.set_font("Arial", 'B', 16)
+            self.set_xy(80, 14)
+            self.cell(50, 10, "Report", align='C')
+            
+            # Sağda Report-No
+            self.set_font("Arial", 'B', 10)
+            self.set_xy(140, 14)
+            self.cell(60, 10, clean_text_for_fpdf(f"Report-No.: {self.antet_data.get('report_no', '')}"), align='R')
+            
+            # Alt gri şerit
+            self.set_fill_color(240, 240, 240)
+            self.rect(10, 28, 190, 3, 'F')
+            
+            self.ln(10)
+            
+    def footer(self):
+        # Sayfanın en altından 20mm yukarıya çık
+        self.set_y(-20)
+        self.set_font("Arial", "", 8)
+        
+        # Siyah çerçeve ayarı
+        self.set_draw_color(0, 0, 0)
+        self.set_line_width(0.5)
+        
+        # Kutuların Koordinatları (Genişlik 190mm)
+        box_x = 10
+        box_y = self.get_y()
+        box_w = 190
+        box_h = 10
+        
+        # Dış Çerçeveyi Çiz
+        self.rect(box_x, box_y, box_w, box_h)
+        
+        # İç Dikey Çizgi (Sol kısımdan 160mm sonrasına çekilir, sağa 30mm kalır)
+        self.line(box_x + 160, box_y, box_x + 160, box_y + box_h)
+        
+        # Sol Alan (Dosya Yolu ve Geçerlilik Metni)
+        path_text = clean_text_for_fpdf(self.antet_data.get('file_path', ''))
+        valid_text = "This document was created electronically and is valid without signature."
+        
+        self.set_xy(box_x, box_y + 1)
+        # Metni ortalayarak sığdırıyoruz
+        self.multi_cell(160, 4, f"{path_text}\n{valid_text}", align='C')
+        
+        # Sağ Alan (Sayfa Numarası)
+        self.set_xy(box_x + 160, box_y)
+        self.cell(30, box_h, f"Page: {self.page_no()} of {{nb}}", align='C')
+
+def build_pdf_report(report_data, antet_data):
+    pdf = GatesReport(antet_data)
+    pdf.alias_nb_pages() # Toplam sayfa sayısı için {nb} kullanımını açar
+    pdf.set_auto_page_break(auto=True, margin=25) # Footer ile çakışmaması için margin'i artırdık
     pdf.add_page()
     
-    if antet_data:
-        # 1. SAYFA DETAYLI ANTET (Sadece ilk sayfada çalışır)
-        # Kırmızı üst şerit
-        pdf.set_fill_color(200, 0, 0)
-        pdf.rect(10, 10, 190, 2, 'F')
-        
-        # Logo ve Report başlığı alanı dış çerçeve
-        pdf.set_line_width(0.5)
-        pdf.rect(10, 12, 190, 23)
-        
-        # Logo ekleme (varsa)
-        try:
-            pdf.image("gates_logo.png", x=12, y=14, w=35)
-        except:
-            pdf.set_font("Arial", 'B', 14)
-            pdf.set_xy(12, 20)
-            pdf.cell(35, 10, "GATES")
-            
-        # Gri desenli alt çizgi (Logo alanının hemen altında)
-        pdf.set_fill_color(240, 240, 240)
-        pdf.rect(10, 31, 190, 4, 'F')
-        
-        # Ortada Report Yazısı
-        pdf.set_font("Arial", 'B', 22)
-        pdf.set_xy(10, 16)
-        pdf.cell(190, 10, "Report", align='C')
-        
-        # Sağ üstte Report-No
-        pdf.set_font("Arial", 'B', 10)
-        pdf.set_xy(10, 14)
-        pdf.cell(188, 5, clean_text_for_fpdf(f"Report-No.: {antet_data.get('report_no', '')}"), align='R')
-        
-        # Tablo 1. Satır: Subject
-        pdf.rect(10, 35, 190, 15)
-        pdf.set_xy(11, 36)
-        pdf.set_font("Arial", '', 10)
-        pdf.cell(20, 5, "Subject:")
-        pdf.set_xy(10, 41)
-        pdf.set_font("Arial", 'B', 12)
-        pdf.cell(190, 6, clean_text_for_fpdf(antet_data.get('subject', '')), align='C')
-        
-        # Tablo 2. Satır: Date ve Location
-        pdf.rect(10, 50, 190, 10)
-        pdf.line(105, 50, 105, 60)
-        pdf.set_xy(11, 52)
-        pdf.set_font("Arial", '', 10)
-        pdf.cell(15, 6, "Date:")
-        pdf.set_font("Arial", '', 10)
-        pdf.cell(75, 6, clean_text_for_fpdf(antet_data.get('date', '')))
-        
-        pdf.set_xy(106, 52)
-        pdf.cell(20, 6, "Location:")
-        pdf.cell(60, 6, clean_text_for_fpdf(antet_data.get('location', '')))
-        
-        # Tablo 3. Satır: Author ve Department (Çok satırlı)
-        pdf.rect(10, 60, 190, 20)
-        pdf.line(105, 60, 105, 80)
-        
-        pdf.set_xy(11, 62)
-        pdf.cell(20, 5, "Author:")
-        pdf.set_xy(31, 62)
-        pdf.multi_cell(70, 4.5, clean_text_for_fpdf(antet_data.get('author', '')))
-        
-        pdf.set_xy(106, 62)
-        pdf.cell(25, 5, "Department:")
-        pdf.set_xy(131, 62)
-        pdf.multi_cell(65, 4.5, clean_text_for_fpdf(antet_data.get('department', '')))
-        
-        # Tablo 4. Satır: Distribution list
-        pdf.rect(10, 80, 190, 10)
-        pdf.set_xy(11, 82)
-        pdf.cell(30, 6, "Distribution list:")
-        pdf.cell(150, 6, clean_text_for_fpdf(antet_data.get('distribution', '')))
-        
-        # Çizgi kalınlığını normale döndür
-        pdf.set_line_width(0.2)
-        pdf.set_xy(10, 95) # Sonraki içerik için imleci konumlandır
-    else:
-        pdf.set_font("Arial", 'B', 16)
-        pdf.cell(0, 10, clean_text_for_fpdf("Gates R&D NVH Analysis Report"), ln=True, align='C')
-        pdf.ln(10)
+    # ----------------------------------------------------
+    # İLK SAYFA ANTETİ (FULL HEADER)
+    # ----------------------------------------------------
+    start_y = 10
+    # Kırmızı şerit (kalın)
+    pdf.set_fill_color(200, 0, 0)
+    pdf.rect(10, start_y, 190, 4, 'F')
     
-    # Genel Test Parametreleri
+    # Siyah çerçeveli ana kutu
+    pdf.set_draw_color(0, 0, 0)
+    pdf.set_line_width(0.5)
+    pdf.rect(10, start_y + 4, 190, 45)
+    
+    # Kutu içi yatay çizgiler
+    pdf.line(10, start_y + 24, 200, start_y + 24) # Report kısmının altı
+    pdf.line(10, start_y + 29, 200, start_y + 29) # Gri şeritin altı
+    pdf.line(10, start_y + 39, 200, start_y + 39) # Date / Location satırının altı
+    
+    # Kutu içi dikey çizgi
+    pdf.line(110, start_y + 29, 110, start_y + 49) # Alt kısmı ikiye bölen çizgi
+    
+    # İçerik - Report ve Logo
+    try:
+        pdf.image("gates_logo.png", x=12, y=start_y + 6, w=0, h=16)
+    except:
+        pdf.set_font("Arial", 'B', 16)
+        pdf.set_xy(12, start_y + 10)
+        pdf.cell(30, 10, "GATES")
+        
+    pdf.set_font("Arial", 'B', 20)
+    pdf.set_xy(80, start_y + 8)
+    pdf.cell(50, 10, "Report", align='C')
+    
+    pdf.set_font("Arial", 'B', 10)
+    pdf.set_xy(130, start_y + 5)
+    pdf.cell(68, 10, clean_text_for_fpdf(f"Report-No.: {antet_data['report_no']}"), align='R')
+    
+    # Gri taralı şerit
+    pdf.set_fill_color(240, 240, 240)
+    pdf.rect(10.25, start_y + 24.25, 189.5, 4.5, 'F')
+    
+    # Veri giriş alanları
+    pdf.set_font("Arial", '', 10)
+    
+    # Satır 1: Subject
+    pdf.set_xy(11, start_y + 30)
+    pdf.cell(20, 5, "Subject:")
     pdf.set_font("Arial", 'B', 12)
-    pdf.cell(0, 8, clean_text_for_fpdf("Test Parameters:"), ln=True)
+    pdf.set_xy(10, start_y + 32)
+    pdf.cell(190, 5, clean_text_for_fpdf(antet_data['subject']), align='C')
+    
+    pdf.set_font("Arial", '', 10)
+    # Satır 2: Date ve Location
+    pdf.set_xy(11, start_y + 40)
+    pdf.cell(15, 8, "Date:")
+    pdf.set_xy(35, start_y + 40)
+    pdf.cell(50, 8, clean_text_for_fpdf(antet_data['date']))
+    
+    pdf.set_xy(111, start_y + 40)
+    pdf.cell(20, 8, "Location:")
+    pdf.set_xy(135, start_y + 40)
+    pdf.cell(50, 8, clean_text_for_fpdf(antet_data['location']))
+    
+    # Satır 3: Author ve Department
+    pdf.set_xy(11, start_y + 49)
+    pdf.cell(15, 8, "Author:")
+    pdf.set_xy(35, start_y + 50)
+    pdf.multi_cell(70, 4, clean_text_for_fpdf(antet_data['author']))
+    
+    pdf.set_xy(111, start_y + 49)
+    pdf.cell(25, 8, "Department:")
+    pdf.set_xy(135, start_y + 50)
+    pdf.multi_cell(60, 4, clean_text_for_fpdf(antet_data['department']))
+    
+    # Ek dikey/yatay çizgi ve Distribution
+    pdf.line(10, start_y + 59, 200, start_y + 59)
+    pdf.set_xy(11, start_y + 60)
+    pdf.cell(25, 8, "Distribution list:")
+    pdf.set_xy(38, start_y + 60)
+    pdf.cell(100, 8, clean_text_for_fpdf(antet_data['dist_list']))
+    pdf.rect(10, start_y + 59, 190, 10)
+    
+    # Y-pozisyonunu güncelle (Ana içerik buradan başlayacak)
+    pdf.set_y(start_y + 80)
+    # ----------------------------------------------------
+
+    # Dosya ve Sistem Verileri
+    pdf.set_font("Arial", 'B', 12)
+    pdf.cell(0, 8, "Test File & System Parameters", ln=True)
     pdf.set_font("Arial", '', 11)
     pdf.cell(0, 6, clean_text_for_fpdf(f"Audio File: {report_data['file_name']}"), ln=True)
     pdf.cell(0, 6, clean_text_for_fpdf(f"SPL Calibration (Max Hold): {report_data['max_spl']} dB"), ln=True)
     pdf.cell(0, 6, clean_text_for_fpdf(f"RPM Info: {report_data['rpm_info']}"), ln=True)
-    pdf.ln(5)
+    pdf.ln(10)
     
-    for section in ["Color Map", "Order Plot", "SII (Gauge)", "SII (Bands)", "1/3 Octave"]:
-        if section in report_data["figures"]:
-            # İlk sayfanın dolmasını beklemeden, eğer "Test Parameters" sonrası yeterli yer yoksa yeni sayfa aç,
-            # Genellikle grafikler büyük olduğu için her birini ayrı sayfaya koymak daha garantilidir.
-            # İlk grafik için zaten ilk sayfadayız, sadece yer kontrolü yapıyoruz.
-            
-            # Gauge grafiği küçük olduğu için yeni sayfaya geçmeyebilir, ama diğerleri için geçelim.
-            if section != "SII (Gauge)" or pdf.get_y() > 150: 
-                pdf.add_page()
-                
+    # Grafikler ve Yorumlar
+    # SII iki farklı grafik ürettiği için özel liste
+    render_sequence = [
+        ("Color Map", "Color Map"),
+        ("Order Plot", "Order Plot"),
+        ("SII Gauge", "SII Gauge"),
+        ("SII Contribution", "SII"),
+        ("1/3 Octave", "1/3 Octave")
+    ]
+
+    for fig_key, diag_key in render_sequence:
+        if fig_key in report_data["figures"]:
+            pdf.add_page()
             pdf.set_font("Arial", 'B', 14)
-            pdf.cell(0, 10, clean_text_for_fpdf(section), ln=True)
+            pdf.cell(0, 10, clean_text_for_fpdf(fig_key), ln=True)
             
-            fig = report_data["figures"][section]
+            fig = report_data["figures"][fig_key]
             with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp_img:
                 fig.write_image(tmp_img.name, format="png", engine="kaleido", width=800, height=450)
-                # Resmin nerede çizileceğini ve genişliğini belirle
                 pdf.image(tmp_img.name, x=10, w=190)
                 tmp_img_path = tmp_img.name
             
             os.remove(tmp_img_path)
             pdf.ln(5)
             
-            # Yorumlamayı (Teşhis) ekle
-            diag_key = section.replace(" (Gauge)", "").replace(" (Bands)", "")
-            if diag_key in report_data["diagnostics"] and section != "SII (Gauge)": # Gauge altına teşhis yazma, Bands altına yazsın
+            # Teşhis metni varsa grafiğin altına ekle
+            if diag_key in report_data["diagnostics"]:
                 pdf.set_font("Arial", '', 11)
                 diag_text = "Diagnosis / Teshis: " + report_data["diagnostics"][diag_key]
                 pdf.multi_cell(0, 6, clean_text_for_fpdf(diag_text))
-                pdf.ln(10)
-            elif diag_key == "SII" and section == "SII (Gauge)":
-                 pdf.ln(5) # Sadece biraz boşluk bırak
-                 
+                # Aynı teşhis metnini tekrar yazmamak için siliyoruz
+                del report_data["diagnostics"][diag_key]
+    
+    # PDF'i Byte'a Çevir
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_pdf:
         pdf.output(tmp_pdf.name)
         with open(tmp_pdf.name, "rb") as f:
@@ -531,7 +517,7 @@ else:
 
 st.sidebar.markdown("---")
 # ============================================================
-# ANALİZ BUTONU
+# ANALİZ BUTONU VE PDF OLUŞTURMA BUTONU
 # ============================================================
 if st.sidebar.button(t("🚀 Analiz Yap", "🚀 Run Analysis"), type="primary", use_container_width=True):
     if uploaded_audio is not None:
@@ -687,12 +673,12 @@ with tab_ai:
     ))
     fig_sii.update_layout(height=430, paper_bgcolor='rgba(0,0,0,0)', font=dict(family="Arial, sans-serif"))
     st.plotly_chart(fig_sii, use_container_width=True)
-    report_data["figures"]["SII (Gauge)"] = fig_sii
+    report_data["figures"]["SII Gauge"] = fig_sii # İlk grafik
 
     fig_contribution = go.Figure(go.Bar(x=[format_frequency(v) for v in sii_table["frequency_hz"]], y=100.0 * sii_table["contribution"], marker_color="#E61A25"))
     fig_contribution.update_layout(title=t(f"SII Katkısı (Toplam: %{sii_percent:.1f})", f"SII Contribution (Total: {sii_percent:.1f}%)"), height=430)
     st.plotly_chart(fig_contribution, use_container_width=True)
-    report_data["figures"]["SII (Bands)"] = fig_contribution
+    report_data["figures"]["SII Contribution"] = fig_contribution # İkinci grafik
 
     st.markdown("### 🤖 Akıllı Teşhis (Auto-Interpretation)")
     if sii_percent >= 75: diag_tr = "Makine çalışma gürültüsü, insan iletişimini engellemiyor. İş güvenliği açısından **%100 güvenli ve konforlu bölge**."
@@ -732,57 +718,44 @@ with tab_octave:
     report_data["diagnostics"]["1/3 Octave"] = diag_tr
 
 # ============================================================
-# POP-UP (MODAL) ANTET DİYALOĞU
-# ============================================================
-@st.dialog(t("📄 PDF Rapor Antet Bilgileri", "📄 PDF Report Header Info"))
-def show_antet_form(r_data):
-    st.write(t("Lütfen PDF raporunun ilk sayfasında yer alacak bilgileri doldurun.", "Please fill in the header information for the PDF report."))
-    
-    # Varsayılan değerler görseldeki ile birebir aynı
-    r_no = st.text_input("Report-No.", "E4119 R0010 J-2603055")
-    subj = st.text_input("Subject", "Customer return inspection")
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        dt = st.text_input("Date", "10.07.2026")
-    with col2:
-        loc = st.text_input("Location", "Technical Center Izmir")
-        
-    col3, col4 = st.columns(2)
-    with col3:
-        auth = st.text_area("Author", "E.Ozcuhadar,\nTest Analysis Responsible\nEngineering ESPT - EMEA", height=120)
-    with col4:
-        dept = st.text_area("Department", "S.Cankul\nTest Lab. Supervisor\nEngineering ESPT - EMEA", height=120)
-        
-    dist = st.text_input("Distribution list", "Torsten Paluszek")
-    
-    if st.button(t("Raporu Oluştur (PDF)", "Generate Report (PDF)"), type="primary", use_container_width=True):
-        antet_data = {
-            "report_no": r_no,
-            "subject": subj,
-            "date": dt,
-            "location": loc,
-            "author": auth,
-            "department": dept,
-            "distribution": dist
-        }
-        
-        with st.spinner(t("PDF oluşturuluyor, grafikler işleniyor...", "Generating PDF, processing charts...")):
-            try:
-                pdf_bytes = build_pdf_report(r_data, antet_data)
-                st.session_state["pdf_bytes"] = pdf_bytes
-                st.session_state.pdf_ready = True
-                st.rerun() # Modalı kapat ve ekranı yenile
-            except Exception as e:
-                st.error(f"PDF Oluşturma Hatası: {e}")
-
-# ============================================================
-# PDF RAPORLAMA BUTONLARI (SOL MENÜ ALT KISIM)
+# PDF RAPORLAMA ARAYÜZÜ VE POP-UP
 # ============================================================
 if PDF_ENABLED:
     st.sidebar.markdown("---")
+    
+    @st.dialog("PDF Rapor Bilgileri (Antet)")
+    def pdf_antet_form():
+        report_no = st.text_input("Report-No.:", value="E4119 R0010 J-2603055")
+        subject = st.text_input("Subject:", value="Customer return inspection")
+        col1, col2 = st.columns(2)
+        date_str = col1.text_input("Date:", value="10.07.2026")
+        location = col2.text_input("Location:", value="Technical Center Izmir")
+        
+        author = st.text_area("Author:", value="E.Ozcuhadar,\nTest Analysis Responsible\nEngineering ESPT – EMEA", height=100)
+        department = st.text_area("Department:", value="S.Cankul\nTest Lab. Supervisor\nEngineering ESPT – EMEA", height=100)
+        
+        dist_list = st.text_input("Distribution list:", value="Torsten Paluszek")
+        file_path = st.text_input("File Path (Bottom Footer):", value=r"N:\Engineering\Internal\Working_Folders\18_TEST\03 Test Report Preparation\1) WORD TEST REPORTS\3 CUSTOMER RETURN\E4119\06.07.2026 - 2\E4119 R0010 J-2603055.docx")
+        
+        if st.button("Raporu Oluştur (Generate PDF)"):
+            with st.spinner("PDF oluşturuluyor, lütfen bekleyin..."):
+                antet_data = {
+                    "report_no": report_no,
+                    "subject": subject,
+                    "date": date_str,
+                    "location": location,
+                    "author": author,
+                    "department": department,
+                    "dist_list": dist_list,
+                    "file_path": file_path
+                }
+                pdf_bytes = build_pdf_report(report_data, antet_data)
+                st.session_state["pdf_bytes"] = pdf_bytes
+                st.session_state.pdf_ready = True
+                st.rerun() # Pop-up'ı kapat ve ana sayfayı güncelle
+                
     if st.sidebar.button(t("📄 PDF Raporu Hazırla", "📄 Prepare PDF Report"), use_container_width=True):
-        show_antet_form(report_data)
+        pdf_antet_form()
 
     if st.session_state.get("pdf_ready", False) and "pdf_bytes" in st.session_state:
         st.sidebar.download_button(
@@ -795,5 +768,5 @@ if PDF_ENABLED:
         )
 else:
     st.sidebar.markdown("---")
-    st.sidebar.warning(t("PDF Raporu alabilmek için terminalde şu komutu çalıştırın: \n\npip install fpdf2 kaleido==0.2.1", 
-                         "To generate PDF reports, run this command in your terminal: \n\npip install fpdf2 kaleido==0.2.1"))
+    st.sidebar.warning(t("PDF Raporu alabilmek için terminalde şu komutu çalıştırın: \n\npip install fpdf kaleido", 
+                         "To generate PDF reports, run this command in your terminal: \n\npip install fpdf kaleido"))
