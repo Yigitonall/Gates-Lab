@@ -1,6 +1,5 @@
 import io
 import math
-import traceback
 import os
 import tempfile
 import time
@@ -12,7 +11,6 @@ import plotly.graph_objects as go
 import streamlit as st
 from scipy.io import wavfile
 from scipy.signal import spectrogram, welch
-import datetime
 
 try:
     from fpdf import FPDF
@@ -48,6 +46,7 @@ st.markdown("""
 # DİL SEÇİMİ VE ÇEVİRİ MOTORU
 # ============================================================
 try:
+    # Sol menüdeki renkli logo
     st.sidebar.image("gates_logo.png", use_container_width=True)
 except:
     pass
@@ -85,100 +84,109 @@ SII_INTERNAL_NOISE = np.array([-3.9, -9.7, -12.5, -17.7, -25.9, -7.1], dtype=flo
 SII_NORMAL_SPEECH = np.array([34.75, 34.27, 25.01, 17.32, 9.33, 1.13], dtype=float)
 
 # ============================================================
-# PDF İÇİN YARDIMCI FONKSİYONLAR VE SINIFLAR
+# PDF RAPORLAMA KÜTÜPHANESİ VE TASARIM
 # ============================================================
 def clean_text_for_fpdf(txt):
     if not isinstance(txt, str): return str(txt)
     tr_map = {'ç':'c', 'ğ':'g', 'ı':'i', 'ö':'o', 'ş':'s', 'ü':'u', 'Ç':'C', 'Ğ':'G', 'İ':'I', 'Ö':'O', 'Ş':'S', 'Ü':'U'}
-    for tr, eng in tr_map.items(): txt = txt.replace(tr, eng)
+    for tr, eng in tr_map.items():
+        txt = txt.replace(tr, eng)
     txt = txt.replace("**", "")
     return txt.encode('latin-1', 'ignore').decode('latin-1')
 
 if PDF_ENABLED:
     class GatesReport(FPDF):
-        def __init__(self, data):
+        def __init__(self, data, antet_data):
             super().__init__()
-            self.antet_data = data
+            self.report_data = data
+            self.antet_data = antet_data
             
         def header(self):
-            # 1. sayfa hariç diğer sayfalardaki dar logo anteti
-            if self.page_no() > 1 and self.antet_data:
+            # İlk sayfa hariç diğer sayfaların üst anteti
+            if self.page_no() > 1:
+                self.set_line_width(0.5)
+                
+                # Kırmızı üst şerit
                 self.set_fill_color(200, 0, 0)
                 self.rect(10, 10, 190, 2, 'F')
                 
+                # Logo alanı (Siyah-Beyaz Logo)
                 try:
-                    # PDF İçin Güncellenmiş Siyah Logo
-                    self.image("gatessiyah_logo.png", x=11, y=13, w=0, h=14)
+                    self.image("gatessiyah_logo.png", x=10, y=14, w=0, h=14)
                 except:
-                    self.set_font("Arial", 'B', 14)
-                    self.set_xy(11, 16)
-                    self.cell(35, 10, "GATES")
+                    self.set_font("Arial", 'B', 20)
+                    self.set_xy(10, 16)
+                    self.cell(40, 10, "GATES")
                     
-                self.set_font("Arial", 'B', 16)
-                self.set_xy(80, 14)
+                # Ortada Report Yazısı
+                self.set_font("Arial", 'B', 18)
+                self.set_xy(80, 16)
                 self.cell(50, 10, "Report", align='C')
                 
+                # Sağda Report-No
                 self.set_font("Arial", 'B', 10)
-                self.set_xy(130, 14)
-                self.cell(70, 10, clean_text_for_fpdf(f"Report-No.: {self.antet_data.get('report_no', '')}"), align='R')
+                self.set_xy(140, 16)
+                self.cell(60, 6, clean_text_for_fpdf(f"Report-No.: {self.antet_data.get('report_no', '')}"), align='R')
                 
+                # Alt gri şerit
                 self.set_fill_color(240, 240, 240)
-                self.rect(10, 28, 190, 3, 'F')
+                self.rect(10, 32, 190, 3, 'F')
                 
-                # İçeriği antetin altına itmek için kalemi (Y-eksenini) aşağıya taşıyoruz
-                self.set_y(35)
-                
+                # İçeriğin antetin altına taşmaması için kalemi aşağı itiyoruz
+                self.set_y(40)
+
         def footer(self):
-            # Alt kısımdan 26mm yukarıya konumlan (Kutu yüksekliğini 16mm yapacağımız için pay bırakıyoruz)
-            self.set_y(-26)
+            # Alt kısımdan 25mm yukarıya konumlan
+            self.set_y(-25)
             self.set_font("Arial", "", 8)
+            
             self.set_line_width(0.5)
             
             box_x = 10
             box_y = self.get_y()
             box_w = 190
-            box_h = 16 # <-- Kutu Yüksekliği 10'dan 16'ya Çıkarıldı (Taşmayı Önlemek İçin)
+            box_h = 16
             
-            # Ana çerçeve ve dikey bölücü çizgi
+            # Dış çerçeve ve iç dikey çizgi
             self.rect(box_x, box_y, box_w, box_h)
             self.line(box_x + 160, box_y, box_x + 160, box_y + box_h)
             
+            # Sol bölüm - Metin (Yol + Geçerlilik)
             path_text = clean_text_for_fpdf(self.antet_data.get('file_path', ''))
             valid_text = "This document was created electronically and is valid without signature."
+            combined_text = f"{path_text}\n{valid_text}"
             
-            # Sol Taraf: Dosya konumu ve geçerlilik
-            # Uzun yolları dikeyde otomatik ortalamak için matematiksel satır hesabı
-            line_count = 1 + max(1, math.ceil(len(path_text) / 110))
-            text_height = line_count * 4
-            y_offset = max(1, (box_h - text_height) / 2)
+            # Metni dikey ortalamak için hafif üstten boşluk veriyoruz
+            self.set_xy(box_x, box_y + 2)
+            self.multi_cell(160, 4, combined_text, align='C')
             
-            self.set_xy(box_x, box_y + y_offset)
-            self.multi_cell(160, 4, f"{path_text}\n{valid_text}", align='C')
-            
-            # Sağ Taraf: Sayfa numarası
+            # Sağ bölüm - Sayfa Numarası
             self.set_xy(box_x + 160, box_y)
             self.cell(30, box_h, f"Page: {self.page_no()} of {{nb}}", align='C')
 
     def build_pdf_report(report_data, antet_data):
-        pdf = GatesReport(antet_data)
+        pdf = GatesReport(report_data, antet_data)
         pdf.alias_nb_pages()
-        pdf.set_auto_page_break(auto=True, margin=30) # <-- Alt marjin 25'ten 30'a çıkarıldı (Footer çakışmasını engellemek için)
+        pdf.set_auto_page_break(auto=True, margin=30)
         pdf.add_page()
         
-        # --- İLK SAYFA ANTETİ (YENİDEN BOYUTLANDIRILMIŞ) ---
+        # --- İLK SAYFA ANTETİ (GRID) ---
         pdf.set_line_width(0.5)
         
-        # Kırmızı üst şerit (Daha ince: 2mm)
-        pdf.set_fill_color(200, 0, 0)
-        pdf.rect(10, 10, 190, 2, 'F')
+        # Dış Çerçeve (Logo ve Rapor Numarası Bloğu - H: 28mm)
+        # Siyah çerçevenin önce çizilmesi ve kırmızı şeridin onun içine hizalanması
+        pdf.rect(10, 10, 190, 28)
         
-        # Logo ve Rapor Numarası Bloğu (H: 24mm)
-        pdf.rect(10, 12, 190, 24)
+        # Kırmızı üst şerit (İnce: 2mm)
+        # Çizgi kalınlığı 0.5mm olduğu için içeriye 0.25mm ofset verilerek milimetrik hizalandı
+        pdf.set_fill_color(200, 0, 0)
+        pdf.rect(10.25, 10.25, 189.5, 2, 'F')
+        
+        # Logo alanı
         try:
-            # PDF İçin Güncellenmiş Siyah Logo
-            pdf.image("gatessiyah_logo.png", x=12, y=16, w=0, h=16)
+            pdf.image("gatessiyah_logo.png", x=12, y=14, w=0, h=14)
         except:
-            pdf.set_font("Arial", 'B', 16)
+            pdf.set_font("Arial", 'B', 20)
             pdf.set_xy(12, 19)
             pdf.cell(40, 10, "GATES")
             
@@ -195,122 +203,122 @@ if PDF_ENABLED:
         pdf.rect(10, 36, 190, 4, 'F')
         
         # Konu (Subject) Bloğu (H: 12mm)
-        
-        # Konu (Subject) Bloğu (H: 12mm)
         pdf.rect(10, 40, 190, 12)
         pdf.set_font("Arial", '', 10)
-        pdf.set_xy(12, 42)
-        pdf.cell(30, 8, "Subject:")
-        pdf.set_font("Arial", 'B', 12)
-        pdf.set_xy(45, 42)
-        pdf.cell(150, 8, clean_text_for_fpdf(antet_data.get('subject', '')), align='C')
+        pdf.set_xy(11, 41)
+        pdf.cell(30, 5, "Subject:")
+        pdf.set_font("Arial", 'B', 14)
+        pdf.set_xy(42, 43)
+        pdf.cell(148, 6, clean_text_for_fpdf(antet_data.get('subject', '')), align='C')
         
-        # Tarih ve Lokasyon Bloğu (H: 8mm)
-        pdf.rect(10, 52, 100, 8)
-        pdf.line(42, 52, 42, 60) # Date dikey ayırıcı çizgi
-        
-        pdf.rect(110, 52, 90, 8)
-        pdf.line(138, 52, 138, 60) # Location dikey ayırıcı çizgi
-        
-        pdf.set_font("Arial", '', 10)
-        pdf.set_xy(12, 53)
-        pdf.cell(28, 6, "Date:")
-        pdf.set_xy(44, 53)
-        pdf.cell(64, 6, clean_text_for_fpdf(antet_data.get('date', '')))
-        
-        pdf.set_xy(112, 53)
-        pdf.cell(24, 6, "Location:")
-        pdf.set_xy(140, 53)
-        pdf.cell(58, 6, clean_text_for_fpdf(antet_data.get('location', '')))
-        
-        # Yazar (Author) ve Departman Bloğu (H: 16mm - Çok satırlılar için genişletildi)
-        pdf.rect(10, 60, 100, 16)
-        pdf.line(42, 60, 42, 76) # Author dikey ayırıcı çizgi
-        
-        pdf.rect(110, 60, 90, 16)
-        pdf.line(138, 60, 138, 76) # Department dikey ayırıcı çizgi
-        
-        pdf.set_xy(12, 62)
-        pdf.cell(28, 5, "Author:")
-        pdf.set_font("Arial", '', 9)
-        pdf.set_xy(44, 62)
-        pdf.multi_cell(64, 4, clean_text_for_fpdf(antet_data.get('author', '')))
+        # Date & Location Bloğu (H: 8mm)
+        pdf.rect(10, 52, 190, 8)
+        # Dikey çizgiler
+        pdf.line(125, 52, 125, 60) # Location ayracı
+        pdf.line(42, 52, 42, 60)   # Date değer ayracı
+        pdf.line(145, 52, 145, 60) # Location değer ayracı
         
         pdf.set_font("Arial", '', 10)
-        pdf.set_xy(112, 62)
-        pdf.cell(24, 5, "Department:")
-        pdf.set_font("Arial", '', 9)
-        pdf.set_xy(140, 62)
-        pdf.multi_cell(58, 4, clean_text_for_fpdf(antet_data.get('department', '')))
+        pdf.set_xy(11, 53)
+        pdf.cell(30, 6, "Date:")
+        pdf.set_xy(43, 53)
+        pdf.cell(80, 6, clean_text_for_fpdf(antet_data.get('date', '')))
         
-        # Dağıtım Listesi Bloğu (H: 10mm)
+        pdf.set_xy(126, 53)
+        pdf.cell(18, 6, "Location:")
+        pdf.set_xy(146, 53)
+        pdf.cell(50, 6, clean_text_for_fpdf(antet_data.get('location', '')))
+        
+        # Author & Department Bloğu (H: 16mm)
+        pdf.rect(10, 60, 190, 16)
+        # Dikey çizgiler
+        pdf.line(125, 60, 125, 76) # Department ayracı
+        pdf.line(42, 60, 42, 76)   # Author değer ayracı
+        pdf.line(145, 60, 145, 76) # Department değer ayracı
+        
+        pdf.set_font("Arial", '', 10)
+        pdf.set_xy(11, 62)
+        pdf.cell(30, 6, "Author:")
+        pdf.set_font("Arial", '', 9)
+        pdf.set_xy(43, 62)
+        pdf.multi_cell(80, 4, clean_text_for_fpdf(antet_data.get('author', '')))
+        
+        pdf.set_font("Arial", '', 10)
+        pdf.set_xy(126, 62)
+        pdf.cell(18, 6, "Department:")
+        pdf.set_font("Arial", '', 9)
+        self_y = 62
+        pdf.set_xy(146, self_y)
+        pdf.multi_cell(50, 4, clean_text_for_fpdf(antet_data.get('department', '')))
+        
+        # Distribution List Bloğu (H: 10mm)
         pdf.rect(10, 76, 190, 10)
-        pdf.line(42, 76, 42, 86) # Distribution list dikey ayırıcı çizgi
+        # Dikey çizgiler
+        pdf.line(42, 76, 42, 86)
         
         pdf.set_font("Arial", '', 10)
-        pdf.set_xy(12, 78)
-        pdf.cell(28, 6, "Distribution list:")
-        pdf.set_xy(44, 78)
+        pdf.set_xy(11, 78)
+        pdf.cell(30, 6, "Distribution list:")
+        pdf.set_xy(43, 78)
         pdf.cell(145, 6, clean_text_for_fpdf(antet_data.get('distribution', '')))
         
-        # Ana içerik başlangıcı (Aşağı itildi)
+        # Grafiklerin başlaması için kalemi antetin altına alıyoruz
         pdf.set_y(95)
         
-        pdf.set_font("Arial", '', 12)
-        pdf.cell(0, 8, clean_text_for_fpdf(f"Audio File: {report_data['file_name']}"), ln=True)
-        pdf.cell(0, 8, clean_text_for_fpdf(f"SPL Calibration (Max Hold): {report_data['max_spl']} dB"), ln=True)
-        pdf.cell(0, 8, clean_text_for_fpdf(f"RPM Info: {report_data['rpm_info']}"), ln=True)
-        pdf.ln(5)
+        # --- GRAFİKLER VE TEŞHİSLER ---
+        sections = [("Color Map", "Color Map"), ("Order Plot", "Order Plot"), 
+                    ("SII Bands", "1/3 Octave"), ("SII Gauge", "SII"), ("1/3 Octave", "1/3 Octave")]
         
-        # Grafik Çizim Döngüsü
-        sections = ["Color Map", "Order Plot", "SII", "1/3 Octave"]
-        
-        for section in sections:
-            # ---------------- SII ÖZEL YAPISI (AYNI SAYFADA 2 GRAFİK) ----------------
-            if section == "SII":
-                if "SII Gauge" in report_data["figures"] and "SII Bands" in report_data["figures"]:
+        drawn_sii_page = False
+
+        for fig_key, diag_key in sections:
+            if fig_key in report_data["figures"]:
+                if fig_key == "SII Gauge":
+                    # İki SII grafiğini aynı sayfaya basma mantığı
                     pdf.add_page()
                     pdf.set_font("Arial", 'B', 14)
-                    pdf.cell(0, 10, clean_text_for_fpdf("Articulation Index / SII"), ln=True)
+                    pdf.cell(0, 10, "Articulation Index / SII Analysis", ln=True)
                     
                     # 1. Gauge Grafiği
-                    fig_gauge = report_data["figures"]["SII Gauge"]
-                    with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp_img:
-                        time.sleep(0.5) 
-                        fig_gauge.write_image(tmp_img.name, format="png", engine="kaleido", width=800, height=320)
-                        pdf.image(tmp_img.name, x=25, w=160) # Ortalıyoruz (210 - 160)/2 = 25
-                        tmp_img_path1 = tmp_img.name
+                    fig1 = report_data["figures"]["SII Gauge"]
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp_img1:
+                        fig1.write_image(tmp_img1.name, format="png", engine="kaleido", width=800, height=350)
+                        pdf.image(tmp_img1.name, x=20, w=170)
+                        tmp_img_path1 = tmp_img1.name
                     os.remove(tmp_img_path1)
                     
                     # 2. Bands Grafiği
-                    fig_bands = report_data["figures"]["SII Bands"]
-                    with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp_img:
-                        time.sleep(0.5)
-                        fig_bands.write_image(tmp_img.name, format="png", engine="kaleido", width=800, height=350)
-                        pdf.image(tmp_img.name, x=25, w=160)
-                        tmp_img_path2 = tmp_img.name
-                    os.remove(tmp_img_path2)
+                    if "SII Bands" in report_data["figures"]:
+                        fig2 = report_data["figures"]["SII Bands"]
+                        with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp_img2:
+                            fig2.write_image(tmp_img2.name, format="png", engine="kaleido", width=800, height=350)
+                            pdf.image(tmp_img2.name, x=20, w=170)
+                            tmp_img_path2 = tmp_img2.name
+                        os.remove(tmp_img_path2)
                     
-                    pdf.ln(5)
-                    
-                    # 3. Teşhis Metni
+                    # Teşhis
                     if "SII" in report_data["diagnostics"]:
+                        pdf.ln(5)
                         pdf.set_font("Arial", '', 11)
                         diag_text = "Diagnosis / Teshis: " + report_data["diagnostics"]["SII"]
                         pdf.multi_cell(0, 6, clean_text_for_fpdf(diag_text))
-                        pdf.ln(5)
-            
-            # ---------------- STANDART GRAFİKLER (TEK SAYFA TEK GRAFİK) ----------------
-            else:
-                if section in report_data["figures"]:
-                    if section != "Color Map":
-                        pdf.add_page()
-                    pdf.set_font("Arial", 'B', 14)
-                    pdf.cell(0, 10, clean_text_for_fpdf(section), ln=True)
                     
-                    fig = report_data["figures"][section]
+                    drawn_sii_page = True
+
+                elif fig_key == "SII Bands":
+                    continue # Gauge kısmında basılacak
+                
+                else:
+                    if fig_key != "Color Map": 
+                        pdf.add_page()
+                    
+                    pdf.set_font("Arial", 'B', 14)
+                    pdf.cell(0, 10, clean_text_for_fpdf(fig_key), ln=True)
+                    
+                    fig = report_data["figures"][fig_key]
                     with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp_img:
-                        time.sleep(0.5)
+                        # Bekleme payı eklendi (Donmaları önlemek için)
+                        time.sleep(0.2)
                         fig.write_image(tmp_img.name, format="png", engine="kaleido", width=800, height=450)
                         pdf.image(tmp_img.name, x=10, w=190)
                         tmp_img_path = tmp_img.name
@@ -318,12 +326,13 @@ if PDF_ENABLED:
                     os.remove(tmp_img_path)
                     pdf.ln(5)
                     
-                    if section in report_data["diagnostics"]:
+                    if diag_key in report_data["diagnostics"]:
                         pdf.set_font("Arial", '', 11)
-                        diag_text = "Diagnosis / Teshis: " + report_data["diagnostics"][section]
+                        diag_text = "Diagnosis / Teshis: " + report_data["diagnostics"][diag_key]
                         pdf.multi_cell(0, 6, clean_text_for_fpdf(diag_text))
-                        pdf.ln(5)
+                        pdf.ln(10)
         
+        # PDF'i Byte'a Çevir
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_pdf:
             pdf.output(tmp_pdf.name)
             with open(tmp_pdf.name, "rb") as f:
@@ -334,7 +343,7 @@ if PDF_ENABLED:
         return pdf_bytes
 
 # ============================================================
-# MÜHENDİSLİK FONKSİYONLARI (Hesaplama)
+# MÜHENDİSLİK FONKSİYONLARI
 # ============================================================
 def safe_integrate(y, x):
     if hasattr(np, 'trapezoid'): return float(np.trapezoid(y, x))
@@ -503,7 +512,7 @@ def bin_tracks_by_rpm(rpm_values: np.ndarray, tracks: dict[float, np.ndarray], r
     return result.dropna(subset=value_columns, how="all")
 
 # ============================================================
-# YAN MENÜ (SIDEBAR) AYARLARI
+# YAN MENÜ (SIDEBAR)
 # ============================================================
 st.sidebar.header(t("📁 Veri Girişi ve Ayarlar", "📁 Data Entry & Settings"))
 
@@ -545,7 +554,7 @@ else:
 st.sidebar.markdown("---")
 
 # ============================================================
-# ANALİZ BUTONU VE PDF OLUŞTURMA ALANI
+# ANALİZ BUTONU
 # ============================================================
 if st.sidebar.button(t("🚀 Analiz Yap", "🚀 Run Analysis"), type="primary", use_container_width=True):
     if uploaded_audio is not None:
@@ -553,6 +562,45 @@ if st.sidebar.button(t("🚀 Analiz Yap", "🚀 Run Analysis"), type="primary", 
         st.session_state.pdf_ready = False
     else:
         st.sidebar.error(t("Lütfen önce bir WAV dosyası yükleyin!", "Please upload a WAV file first!"))
+
+# ============================================================
+# PDF DİALOG MODÜLÜ (POP-UP)
+# ============================================================
+@st.dialog("📄 PDF Rapor Bilgilerini Girin")
+def pdf_info_dialog(report_data):
+    st.write("Lütfen raporun ilk sayfasındaki antette görünecek bilgileri doldurun.")
+    col1, col2 = st.columns(2)
+    with col1:
+        subject = st.text_input("Subject:", value="Customer return inspection")
+        date_val = st.text_input("Date:", value="10.07.2026")
+        author = st.text_area("Author:", value="E.Ozcuhadar,\nTest Analysis Responsible\nEngineering ESPT – EMEA", height=100)
+    with col2:
+        report_no = st.text_input("Report-No.:", value="E4119 R0010 J-2603055")
+        location = st.text_input("Location:", value="Technical Center Izmir")
+        department = st.text_area("Department:", value="S.Cankul\nTest Lab. Supervisor\nEngineering ESPT – EMEA", height=100)
+        
+    distribution = st.text_input("Distribution list:", value="Torsten Paluszek")
+    file_path = st.text_input("File Path (Bottom Footer):", value=r"N:\Engineering\Internal\Working_Folders\18_TEST\03 Test Report Preparation\1) WORD TEST REPORTS\3 CUSTOMER RETURN\E4119\06.07.2026 - 2\E4119 R0010 J-2603055.docx")
+    
+    if st.button("✅ Raporu Oluştur", use_container_width=True):
+        antet_data = {
+            "subject": subject,
+            "date": date_val,
+            "author": author,
+            "report_no": report_no,
+            "location": location,
+            "department": department,
+            "distribution": distribution,
+            "file_path": file_path
+        }
+        with st.spinner("PDF oluşturuluyor, grafikler işleniyor (Lütfen bekleyin)..."):
+            try:
+                pdf_bytes = build_pdf_report(report_data, antet_data)
+                st.session_state["pdf_bytes"] = pdf_bytes
+                st.session_state.pdf_ready = True
+                st.rerun()
+            except Exception as e:
+                st.error(f"PDF Oluşturma Hatası: {e}\n\nLütfen terminalinizde 'pip install fpdf2 kaleido' kütüphanelerinin yüklü olduğundan emin olun.")
 
 # ============================================================
 # ANA AKIŞ VE HESAPLAMALAR
@@ -606,7 +654,7 @@ with tab_color:
     frequency_mask = (spec_f >= 20.0) & (spec_f <= max_display_frequency)
 
     fig_color = go.Figure(go.Heatmap(x=spec_t, y=spec_f[frequency_mask], z=spec_level_db[frequency_mask, :], colorscale="Turbo", zmin=reference_leq_db - 80.0, zmax=reference_leq_db + 5.0, colorbar={"title": t("Seviye<br>[dB]", "Level<br>[dB]")}))
-    fig_color.update_layout(title=t("Kalibre Edilmiş Akustik Spektrogram (Logaritmik Ölçek)", "Calibrated Acoustic Spectrogram (Logarithmic Scale)"), xaxis_title=t("Zaman [s]", "Time [s]"), yaxis_title=t("Frekans [Hz]", "Frequency [Hz]"), yaxis_type="log", height=620, margin=dict(l=40, r=30, t=60, b=40), plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font=dict(color='#212529', family="Arial, sans-serif"))
+    fig_color.update_layout(title=t("Kalibre Edilmiş Akustik Spektrogram (Logaritmik Ölçek)", "Calibrated Acoustic Spectrogram (Logarithmic Scale)"), xaxis_title=t("Zaman [s]", "Time [s]"), yaxis_title=t("Frekans [Hz]", "Frequency [Hz]"), yaxis_type="log", height=620)
     st.plotly_chart(fig_color, use_container_width=True)
 
     report_data["figures"]["Color Map"] = fig_color
@@ -647,7 +695,7 @@ with tab_order:
                 harmonic_text.append(f"{so:g}×")
 
         if harmonic_x: fig_order.add_trace(go.Scatter(x=harmonic_x, y=harmonic_y, mode="markers+text", text=harmonic_text, textposition="top center", marker={"size": 10, "color": "#212529"}))
-        fig_order.update_layout(title=f"{t('Order Spektrumu', 'Order Spectrum')} — {float(fixed_rpm):.0f} RPM", xaxis_title=t("Mertebe / Order", "Order"), yaxis_title=t("dB SPL", "dB SPL"), height=560, hovermode="x unified", margin=dict(l=40, r=30, t=70, b=45), plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font=dict(color='#212529', family="Arial, sans-serif"), xaxis=dict(showgrid=True, gridcolor='#E0E0E0'), yaxis=dict(showgrid=True, gridcolor='#E0E0E0'))
+        fig_order.update_layout(title=f"{t('Order Spektrumu', 'Order Spectrum')} — {float(fixed_rpm):.0f} RPM", xaxis_title=t("Mertebe / Order", "Order"), yaxis_title=t("dB SPL", "dB SPL"), height=560)
         st.plotly_chart(fig_order, use_container_width=True)
         report_data["figures"]["Order Plot"] = fig_order
 
@@ -677,7 +725,7 @@ with tab_order:
             for so in selected_orders:
                 col = f"order_{so:g}"
                 if col in binned_tracks.columns: fig_tracking.add_trace(go.Scatter(x=binned_tracks["rpm"], y=binned_tracks[col], mode="lines+markers", name=f"{so:g}× Order"))
-            fig_tracking.update_layout(title=t("Order Tracking — RPM'e Göre Mertebe Seviyeleri", "Order Tracking"), xaxis_title="RPM", yaxis_title="dB SPL", height=580, hovermode="x unified", colorway=["#E61A25", "#212529", "#BF2026", "#495057", "#ADADAD"], plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font=dict(color='#212529', family="Arial, sans-serif"), xaxis=dict(showgrid=True, gridcolor='#E0E0E0'), yaxis=dict(showgrid=True, gridcolor='#E0E0E0'))
+            fig_tracking.update_layout(title=t("Order Tracking — RPM'e Göre Mertebe Seviyeleri", "Order Tracking"), xaxis_title="RPM", yaxis_title="dB SPL", height=580)
             st.plotly_chart(fig_tracking, use_container_width=True)
             report_data["figures"]["Order Plot"] = fig_tracking
 
@@ -685,28 +733,53 @@ with tab_order:
 # TAB 3 — ARTICULATION INDEX / SII
 # ============================================================
 with tab_ai:
-    speech_efforts_map = {t("Normal", "Normal"): np.array([34.75, 34.27, 25.01, 17.32, 9.33, 1.13])}
+    speech_efforts_map = {
+        t("Normal", "Normal"): np.array([34.75, 34.27, 25.01, 17.32, 9.33, 1.13]),
+        t("Yüksek Sesle", "Raised"): np.array([41.5, 41.6, 35.5, 29.5, 22.8, 14.2]),
+        t("Bağırarak", "Loud"): np.array([45.4, 48.6, 46.1, 41.1, 35.6, 27.2]),
+        t("Çığlık Atarak", "Shout"): np.array([46.4, 53.3, 56.4, 52.1, 46.5, 38.0])
+    }
+    
+    col_speech, col_space = st.columns([1, 2])
+    with col_speech:
+        selected_effort = st.selectbox(t("İletişim Eforu", "Speech Effort"), list(speech_efforts_map.keys()))
+
     octave_noise_levels = octave_band_levels(psd_frequencies, psd, calibration_offset_db, SII_OCTAVE_FREQS)
-    sii_table = compute_octave_sii(octave_noise_levels, speech_efforts_map[t("Normal", "Normal")])
+    sii_table = compute_octave_sii(octave_noise_levels, speech_efforts_map[selected_effort])
     sii_percent = float(sii_table["contribution"].sum()) * 100.0
 
-    fig_sii = go.Figure(go.Indicator(
-        mode="gauge+number", value=sii_percent, number={"suffix": " %", "valueformat": ".1f", "font": {"color": "#212529"}},
-        title={"text": "Octave-band SII / %AI", "font": {"color": "#212529"}},
-        gauge={
-            "axis": {"range": [0, 100], "tickcolor": "#212529"},
-            "steps": [{"range": [0, 30], "color": "#F0F0F0"}, {"range": [30, 70], "color": "#C8C8C8"}, {"range": [70, 100], "color": "#848484"}],
-            "bar": {"color": "#E61A25"},
-        }
-    ))
-    fig_sii.update_layout(height=430, paper_bgcolor='rgba(0,0,0,0)', font=dict(family="Arial, sans-serif"))
-    st.plotly_chart(fig_sii, use_container_width=True)
-    report_data["figures"]["SII Gauge"] = fig_sii
+    color_sii = "#28a745" if sii_percent >= 75 else "#ffc107" if sii_percent >= 45 else "#dc3545"
 
-    fig_contribution = go.Figure(go.Bar(x=[format_frequency(v) for v in sii_table["frequency_hz"]], y=100.0 * sii_table["contribution"], marker_color="#E61A25"))
-    fig_contribution.update_layout(title=t(f"SII Katkısı (Toplam: %{sii_percent:.1f})", f"SII Contribution (Total: {sii_percent:.1f}%)"), height=430, bargap=0.12, plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font=dict(color='#212529', family="Arial, sans-serif"), xaxis=dict(showgrid=False), yaxis=dict(showgrid=True, gridcolor='#E0E0E0'))
-    st.plotly_chart(fig_contribution, use_container_width=True)
-    report_data["figures"]["SII Bands"] = fig_contribution
+    col_gauge, col_bar = st.columns(2)
+    with col_gauge:
+        fig_gauge = go.Figure(go.Indicator(
+            mode="gauge+number", value=sii_percent, title={'text': "SII Skoru"},
+            gauge={
+                'axis': {'range': [0, 100], 'tickwidth': 1, 'tickcolor': "darkblue"},
+                'bar': {'color': color_sii},
+                'bgcolor': "white", 'borderwidth': 2, 'bordercolor': "gray",
+                'steps': [{'range': [0, 45], 'color': 'rgba(220, 53, 69, 0.3)'},
+                          {'range': [45, 75], 'color': 'rgba(255, 193, 7, 0.3)'},
+                          {'range': [75, 100], 'color': 'rgba(40, 167, 69, 0.3)'}]
+            }
+        ))
+        fig_gauge.update_layout(height=400, margin=dict(l=20, r=20, t=50, b=20))
+        st.plotly_chart(fig_gauge, use_container_width=True)
+        report_data["figures"]["SII Gauge"] = fig_gauge
+
+    with col_bar:
+        fig_contribution = go.Figure(go.Bar(
+            x=[format_frequency(v) for v in sii_table["frequency_hz"]], 
+            y=100.0 * sii_table["contribution"], 
+            marker_color="#E61A25"
+        ))
+        fig_contribution.update_layout(
+            title=t(f"Frekanslara Göre SII Katkısı", f"SII Contribution by Frequency"), 
+            height=400,
+            bargap=0.08
+        )
+        st.plotly_chart(fig_contribution, use_container_width=True)
+        report_data["figures"]["SII Bands"] = fig_contribution
 
     st.markdown("### 🤖 Akıllı Teşhis (Auto-Interpretation)")
     if sii_percent >= 75: diag_tr = "Makine çalışma gürültüsü, insan iletişimini engellemiyor. İş güvenliği açısından **%100 güvenli ve konforlu bölge**."
@@ -724,7 +797,7 @@ with tab_octave:
     octave_plot_df["label"] = octave_plot_df["nominal_hz"].map(format_frequency)
 
     fig_octave = go.Figure(go.Bar(x=octave_plot_df["label"], y=octave_plot_df["level_db_spl"], marker_color="#E61A25"))
-    fig_octave.update_layout(title=t("1/3 Oktav Bant Spektrumu", "1/3 Octave Band Spectrum"), height=560, bargap=0.08, xaxis={"type": "category", "categoryorder": "array", "categoryarray": octave_plot_df["label"].tolist(), "tickangle": -45, "showgrid": False}, yaxis=dict(showgrid=True, gridcolor='#E0E0E0'), margin=dict(l=40, r=30, t=70, b=90), plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font=dict(color='#212529', family="Arial, sans-serif"))
+    fig_octave.update_layout(title=t("1/3 Oktav Bant Spektrumu", "1/3 Octave Band Spectrum"), height=560, bargap=0.08)
     st.plotly_chart(fig_octave, use_container_width=True)
     report_data["figures"]["1/3 Octave"] = fig_octave
 
@@ -746,44 +819,12 @@ with tab_octave:
     report_data["diagnostics"]["1/3 Octave"] = diag_tr
 
 # ============================================================
-# PDF RAPORLAMA ARAYÜZÜ VE MODAL POPUP
+# PDF BUTONLARI (YAN MENÜ ALT KISIM)
 # ============================================================
 if PDF_ENABLED:
     st.sidebar.markdown("---")
-    
-    @st.dialog("📋 PDF Rapor Detayları (Header Info)")
-    def pdf_report_dialog():
-        st.write(t("Lütfen rapor antetinde görünecek bilgileri doldurun:", "Please fill in the details for the report header:"))
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            report_no = st.text_input("Report-No.:", value="E4119 R0010 J-2603055")
-            date_str = st.text_input("Date:", value=datetime.date.today().strftime("%d.%m.%Y"))
-            author = st.text_area("Author:", value="E.Ozkuhadar,\nTest Analysis Responsible\nEngineering ESPT - EMEA", height=100)
-        with col2:
-            location = st.text_input("Location:", value="Technical Center Izmir")
-            subject = st.text_input("Subject:", value="Customer return inspection")
-            department = st.text_area("Department:", value="S.Cankul\nTest Lab. Supervisor\nEngineering ESPT - EMEA", height=100)
-            
-        distribution = st.text_input("Distribution list:", value="Torsten Paluszek")
-        file_path = st.text_input("File Path (Bottom Footer):", value=r"N:\Engineering\Internal\Working_Folders\18_TEST\03 Test Report Preparation\1) WORD TEST REPORTS\3 CUSTOMER RETURN\E4119\06.07.2026 - 2\E4119 R0010 J-2603055.docx")
-
-        if st.button("Raporu Oluştur (Generate)", type="primary"):
-            antet_data = {
-                "report_no": report_no, "subject": subject, "date": date_str, "location": location,
-                "author": author, "department": department, "distribution": distribution, "file_path": file_path
-            }
-            with st.spinner("PDF hazırlanıyor..."):
-                try:
-                    pdf_bytes = build_pdf_report(report_data, antet_data)
-                    st.session_state["pdf_bytes"] = pdf_bytes
-                    st.session_state.pdf_ready = True
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"PDF Hatası: {e}")
-
     if st.sidebar.button(t("📄 PDF Raporu Hazırla", "📄 Prepare PDF Report"), use_container_width=True):
-        pdf_report_dialog()
+        pdf_info_dialog(report_data)
 
     if st.session_state.get("pdf_ready", False) and "pdf_bytes" in st.session_state:
         st.sidebar.download_button(
@@ -796,4 +837,5 @@ if PDF_ENABLED:
         )
 else:
     st.sidebar.markdown("---")
-    st.sidebar.warning("PDF Raporu alabilmek için: pip install fpdf2 kaleido==0.2.1")
+    st.sidebar.warning(t("PDF Raporu alabilmek için terminalde şu komutu çalıştırın: \n\npip install fpdf2 kaleido", 
+                         "To generate PDF reports, run this command in your terminal: \n\npip install fpdf2 kaleido"))
