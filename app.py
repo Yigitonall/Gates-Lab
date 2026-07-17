@@ -408,6 +408,33 @@ with tab_color:
             font=dict(color='#212529', family="Arial, sans-serif")
         )
         st.plotly_chart(fig_color, use_container_width=True)
+
+        # --- COLOR MAPS OTOMATİK YORUMLAMA (SMART DIAGNOSTICS) ---
+        st.markdown("### 🤖 Akıllı Teşhis (Auto-Interpretation)")
+        try:
+            # Sadece analiz edilen frekans aralığındaki dB matrisini al
+            db_matrix = spec_level_db[frequency_mask, :]
+            
+            # Zamana göre dalgalanma (Dikey İzler - Vuruntu/Darbe analizi)
+            time_variance = np.var(np.mean(db_matrix, axis=0))
+            # Frekansa göre odaklanma (Yatay İzler - Harmonik/Sürekli inilti analizi)
+            freq_variance = np.var(np.mean(db_matrix, axis=1))
+
+            if time_variance > freq_variance * 1.5: 
+                diag_tr = "Spektrogramda zamana bağlı ani enerji değişimleri (Dikey izler) tespit edildi. Muhtemel Kök Neden: **Anlık vuruntular, metal çarpması veya darbe (Impact) gürültüsü**."
+                diag_en = "Sudden energy changes over time (Vertical traces) detected in the spectrogram. Probable Root Cause: **Instantaneous knocks, metal impacts, or impact noise**."
+            elif freq_variance > time_variance * 1.5:
+                diag_tr = "Spektrogramda belirli frekans bantlarında yoğunlaşma (Yatay bantlar) tespit edildi. Muhtemel Kök Neden: **Dönen parçalardan kaynaklı sürekli inilti, sürtünme veya harmonik gürültü**."
+                diag_en = "Concentration in specific frequency bands (Horizontal bands) detected in the spectrogram. Probable Root Cause: **Continuous whine, friction, or harmonic noise from rotating parts**."
+            else:
+                diag_tr = "Spektrogramda hem zamana hem de frekansa yayılan karmaşık bir gürültü profili gözlemleniyor. Karmaşık (Geniş bantlı) titreşimler incelenmelidir."
+                diag_en = "A complex noise profile spreading across both time and frequency is observed. Complex (Broadband) vibrations should be investigated."
+            
+            st.info(t(f"💡 **Bulgu:** Sinyalin zaman ve frekans eksenindeki enerji dağılım varyansı analiz edildi.\n\n🔍 **Teşhis:** {diag_tr}",
+                      f"💡 **Finding:** The energy distribution variance in the time and frequency axes was analyzed.\n\n🔍 **Diagnosis:** {diag_en}"))
+        except Exception as e:
+            st.warning(t("Teşhis hesaplanamadı.", "Could not calculate diagnosis."))
+
     except Exception as e:
         st.error(t(f"Color Map oluşturulurken bir hata oluştu: {e}", f"Error generating Color Map: {e}"))
 
@@ -454,6 +481,29 @@ with tab_order:
             )
             st.plotly_chart(fig_order, use_container_width=True)
 
+            # --- ORDER PLOT OTOMATİK YORUMLAMA (SMART DIAGNOSTICS) ---
+            st.markdown("### 🤖 Akıllı Teşhis (Auto-Interpretation)")
+            if harmonic_x and harmonic_y:
+                max_idx = np.argmax(harmonic_y)
+                dominant_order = harmonic_x[max_idx]
+                max_db = harmonic_y[max_idx]
+                
+                if abs(dominant_order - 1.0) < 0.1:
+                    diag_tr = "Sistemde **1x (1. Mertebe)** seviyesi baskın. Muhtemel Kök Neden: **Ana şaftta Balanssızlık (Unbalance)**."
+                    diag_en = "The **1x Order** is dominant. Probable Root Cause: **Main shaft Unbalance**."
+                elif abs(dominant_order - 2.0) < 0.1:
+                    diag_tr = "Sistemde **2x (2. Mertebe)** seviyesi baskın. Muhtemel Kök Neden: **Kaplin/Şaft Eksen Kaçıklığı veya Gevşeklik (Misalignment / Looseness)**."
+                    diag_en = "The **2x Order** is dominant. Probable Root Cause: **Coupling/Shaft Misalignment or Looseness**."
+                elif dominant_order % 1 != 0: 
+                    diag_tr = f"Sistemde **{dominant_order}x (Küsuratlı Mertebe)** seviyesi baskın. Muhtemel Kök Neden: **Rulman arızası (Bearing defect) veya Kayış Kayması (Belt Slip)**."
+                    diag_en = f"The **{dominant_order}x (Fractional Order)** is dominant. Probable Root Cause: **Bearing defect or Belt Slip**."
+                else:
+                    diag_tr = f"Sistemde **{dominant_order}x (Yüksek Tam Sayı)** seviyesi baskın. Analiz: Bu frekansı üreten spesifik bir parça (örn: {int(dominant_order)} kanatlı fan veya kasnak) incelenmelidir."
+                    diag_en = f"The **{dominant_order}x (High Integer Order)** is dominant. Analysis: Inspect specific components matching this count (e.g., a {int(dominant_order)}-blade fan)."
+
+                st.info(t(f"💡 **Bulgu:** En yüksek tepe noktası {max_db:.1f} dB ile {dominant_order}x mertebesinde tespit edildi.\n\n🔍 **Teşhis:** {diag_tr}", 
+                          f"💡 **Finding:** The highest peak was detected at {dominant_order}x order with {max_db:.1f} dB.\n\n🔍 **Diagnosis:** {diag_en}"))
+
         else:
             if rpm_dataframe is None or rpm_column is None:
                 st.warning(t("Değişken RPM analizi için sol panelden CSV dosyası yükleyin.", "Upload a CSV file from the left panel for variable RPM analysis."))
@@ -485,30 +535,6 @@ with tab_order:
                     st.error(t("Grafik oluşturmak için devir aralığı yetersiz.", "Insufficient RPM range to generate tracking plot."))
     except Exception as e:
         st.error(t(f"Order analizi yapılırken hata oluştu: {e}", f"Error during Order analysis: {e}"))
-        # --- ORDER PLOT OTOMATİK YORUMLAMA (SMART DIAGNOSTICS) ---
-st.markdown("### 🤖 Akıllı Teşhis (Auto-Interpretation)")
-if harmonic_x and harmonic_y:
-    # En yüksek dB seviyesine sahip mertebeyi bul
-    max_idx = np.argmax(harmonic_y)
-    dominant_order = harmonic_x[max_idx]
-    max_db = harmonic_y[max_idx]
-    
-    if abs(dominant_order - 1.0) < 0.1:
-        diag_tr = "Sistemde **1x (1. Mertebe)** seviyesi baskın. Muhtemel Kök Neden: **Ana şaftta Balanssızlık (Unbalance)**."
-        diag_en = "The **1x Order** is dominant. Probable Root Cause: **Main shaft Unbalance**."
-    elif abs(dominant_order - 2.0) < 0.1:
-        diag_tr = "Sistemde **2x (2. Mertebe)** seviyesi baskın. Muhtemel Kök Neden: **Kaplin/Şaft Eksen Kaçıklığı veya Gevşeklik (Misalignment / Looseness)**."
-        diag_en = "The **2x Order** is dominant. Probable Root Cause: **Coupling/Shaft Misalignment or Looseness**."
-    elif dominant_order % 1 != 0: # Küsuratlı ise (Örn: 2.5x, 3.8x)
-        diag_tr = f"Sistemde **{dominant_order}x (Küsuratlı Mertebe)** seviyesi baskın. Muhtemel Kök Neden: **Rulman arızası (Bearing defect) veya Kayış Kayması (Belt Slip)**."
-        diag_en = f"The **{dominant_order}x (Fractional Order)** is dominant. Probable Root Cause: **Bearing defect or Belt Slip**."
-    else:
-        diag_tr = f"Sistemde **{dominant_order}x (Yüksek Tam Sayı)** seviyesi baskın. Analiz: Bu frekansı üreten spesifik bir parça (örn: {int(dominant_order)} kanatlı fan veya kasnak) incelenmelidir."
-        diag_en = f"The **{dominant_order}x (High Integer Order)** is dominant. Analysis: Inspect specific components matching this count (e.g., a {int(dominant_order)}-blade fan)."
-
-    st.info(t(f"💡 **Bulgu:** En yüksek tepe noktası {max_db:.1f} dB ile {dominant_order}x mertebesinde tespit edildi.\n\n🔍 **Teşhis:** {diag_tr}", 
-              f"💡 **Finding:** The highest peak was detected at {dominant_order}x order with {max_db:.1f} dB.\n\n🔍 **Diagnosis:** {diag_en}"))
-
 
 # ============================================================
 # TAB 3 — ARTICULATION INDEX / SII
@@ -557,9 +583,24 @@ with tab_ai:
             )
             st.plotly_chart(fig_contribution, use_container_width=True)
 
-            if sii_percent >= 75: st.success(t(f"İletişim ortamı mükemmel: **%{sii_percent:.1f} SII**.", f"Communication environment is excellent: **{sii_percent:.1f}% SII**."))
-            elif sii_percent >= 45: st.warning(t(f"İletişim koşula bağlı: **%{sii_percent:.1f} SII**.", f"Communication is conditional: **{sii_percent:.1f}% SII**."))
-            else: st.error(t(f"Gürültü iletişimi güçlü biçimde maskeliyor: **%{sii_percent:.1f} SII**.", f"Noise heavily masks communication: **{sii_percent:.1f}% SII**."))
+            # --- SII OTOMATİK YORUMLAMA (SMART DIAGNOSTICS) ---
+            st.markdown("### 🤖 Akıllı Teşhis (Auto-Interpretation)")
+            if sii_percent >= 75:
+                diag_tr = "Makine çalışma gürültüsü, ortamdaki insan iletişimini engellemiyor. İş güvenliği ve ergonomi açısından **%100 güvenli ve konforlu bölge**."
+                diag_en = "Machine operating noise does not hinder human communication in the environment. **100% safe and comfortable zone** for occupational safety and ergonomics."
+                st.success(t(f"💡 **Bulgu:** SII Değeri %{sii_percent:.1f} (Mükemmel).\n\n🔍 **Teşhis:** {diag_tr}",
+                             f"💡 **Finding:** SII Value is {sii_percent:.1f}% (Excellent).\n\n🔍 **Diagnosis:** {diag_en}"))
+            elif sii_percent >= 45:
+                diag_tr = "Makine gürültüsü ortamdaki konuşmaları kısmen maskeliyor. Etkili iletişim kurmak için personelin **ses yükseltmesi (bağırması) gerekebilir**."
+                diag_en = "Machine noise partially masks conversations in the environment. Personnel **may need to raise their voices (shout)** for effective communication."
+                st.warning(t(f"💡 **Bulgu:** SII Değeri %{sii_percent:.1f} (Koşullu İletişim).\n\n🔍 **Teşhis:** {diag_tr}",
+                             f"💡 **Finding:** SII Value is {sii_percent:.1f}% (Conditional Communication).\n\n🔍 **Diagnosis:** {diag_en}"))
+            else:
+                diag_tr = "Makine gürültüsü insan sesini tamamen yutuyor ve maskeliyor. Operatörler için **kulaklık/yalıtım kesinlikle zorunludur**, uyarı/duyuru sistemleri anlaşılamaz."
+                diag_en = "Machine noise completely swallows and masks the human voice. **Ear protection/isolation is strictly mandatory** for operators; warning systems will be unintelligible."
+                st.error(t(f"💡 **Bulgu:** SII Değeri %{sii_percent:.1f} (Kritik Maskeleme).\n\n🔍 **Teşhis:** {diag_tr}",
+                           f"💡 **Finding:** SII Value is {sii_percent:.1f}% (Critical Masking).\n\n🔍 **Diagnosis:** {diag_en}"))
+
     except Exception as e:
         st.error(t(f"SII Endeksi hesaplanırken hata oluştu: {e}", f"Error calculating SII Index: {e}"))
 
@@ -585,6 +626,33 @@ with tab_octave:
             font=dict(color='#212529', family="Arial, sans-serif")
         )
         st.plotly_chart(fig_octave, use_container_width=True)
+
+        # --- 1/3 OCTAVE OTOMATİK YORUMLAMA (SMART DIAGNOSTICS) ---
+        st.markdown("### 🤖 Akıllı Teşhis (Auto-Interpretation)")
+        try:
+            low_freq_mask = (octave_plot_df["nominal_hz"] >= 20) & (octave_plot_df["nominal_hz"] <= 250)
+            high_freq_mask = (octave_plot_df["nominal_hz"] >= 2000) & (octave_plot_df["nominal_hz"] <= 10000)
+            
+            low_power = np.sum(10 ** (octave_plot_df.loc[low_freq_mask, "level_db_spl"] / 10))
+            high_power = np.sum(10 ** (octave_plot_df.loc[high_freq_mask, "level_db_spl"] / 10))
+            
+            low_db_total = 10 * np.log10(low_power) if low_power > 0 else 0
+            high_db_total = 10 * np.log10(high_power) if high_power > 0 else 0
+
+            if low_db_total > high_db_total + 5:
+                diag_tr = "Spektrumun sol tarafı (20-250 Hz) baskın. Sistemde **yapısal titreşimler, balanssızlık veya kalın uğultu (rumble)** sorunları ön planda."
+                diag_en = "The left side of the spectrum (20-250 Hz) is dominant. **Structural vibrations, unbalance, or deep rumble** issues are prominent."
+            elif high_db_total > low_db_total + 5:
+                diag_tr = "Spektrumun sağ tarafı (2k-10k Hz) baskın. Sistemde **sürtünme, keçe deformasyonu veya tiz ıslık/whine (yüksek frekanslı)** sorunları ön planda."
+                diag_en = "The right side of the spectrum (2k-10k Hz) is dominant. **Friction, seal deformation, or high-frequency whine** issues are prominent."
+            else:
+                diag_tr = "Gürültü enerjisi düşük ve yüksek frekanslar arasında dengeli dağılmış (Geniş bantlı gürültü / White noise karakteristiği)."
+                diag_en = "Noise energy is evenly distributed between low and high frequencies (Broadband noise / White noise characteristic)."
+
+            st.info(t(f"📊 **Enerji Dağılımı:** Düşük Frekans Toplamı: {low_db_total:.1f} dB | Yüksek Frekans Toplamı: {high_db_total:.1f} dB\n\n🔍 **Teşhis:** {diag_tr}",
+                      f"📊 **Energy Distribution:** Low Freq Total: {low_db_total:.1f} dB | High Freq Total: {high_db_total:.1f} dB\n\n🔍 **Diagnosis:** {diag_en}"))
+        except Exception as e:
+            st.warning(t("Teşhis hesaplanamadı.", "Could not calculate diagnosis."))
 
         with st.expander(t("1/3 oktav sonuç tablosu", "1/3 octave result table")):
             df_display = octave_plot_df[["nominal_hz", "exact_hz", "lower_hz", "upper_hz", "level_db_spl"]].round(3).copy()
