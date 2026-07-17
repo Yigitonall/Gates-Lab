@@ -144,7 +144,7 @@ if PDF_ENABLED:
                 self.set_y(35)
 
         def footer(self):
-            # Alt kısımdan yukarıya konumlan (Kutu yüksekliği 16mm yapıldı, taşmalar önlendi)
+            # Alt kısımdan yukarıya konumlan
             self.set_y(-25)
             self.set_font("Arial", "", 8)
             self.set_line_width(0.5)
@@ -186,11 +186,8 @@ if PDF_ENABLED:
         # --- İLK SAYFA ANTETİ ---
         pdf.set_line_width(0.5)
         
-        # Gri alt şerit (Önce çizilir ki siyah çerçeve üstte kalsın)
-        pdf.set_fill_color(240, 240, 240)
-        pdf.rect(10.25, 36, 189.5, 4, 'F')
-        
         # Dış Çerçeve ve Kutular (Çizgiler)
+        # Önce dış çerçeveyi çiziyoruz ki kırmızı şerit üstüne binip köşeleri bozmasın
         pdf.rect(10, 10, 190, 30) # Logo ve Rapor Numarası Bloğu (H: 30mm)
         pdf.rect(10, 40, 190, 14) # Subject Bloğu
         pdf.rect(10, 54, 190, 10) # Date/Location Bloğu
@@ -201,10 +198,14 @@ if PDF_ENABLED:
         pdf.set_fill_color(200, 0, 0)
         pdf.rect(10.25, 10.25, 189.5, 2, 'F')
         
+        # Gri alt şerit (Önce çizilir ki siyah çerçeve üstte kalsın)
+        pdf.set_fill_color(240, 240, 240)
+        pdf.rect(10.25, 36, 189.5, 4, 'F')
+        
         # Dikey Ayırıcı Çizgiler (Seperatörler)
         pdf.line(42, 54, 42, 90)   # Sol etiketlerin (Date, Author, Dist) ayırıcısı
         pdf.line(125, 54, 125, 80) # Orta ayırıcı (Location, Dept)
-        pdf.line(152, 54, 152, 80) # Sağ etiketlerin ayırıcısı
+        pdf.line(152, 54, 152, 80) # Sağ etiketlerin ayırıcısı (Artık kelime taşımasın diye 152'de)
         
         # Logo
         try:
@@ -285,8 +286,8 @@ if PDF_ENABLED:
                 pdf.cell(0, 10, clean_text_for_fpdf(title_text), ln=True)
                 
                 fig = report_data["figures"][fig_key]
-                # SII grafiklerini dikeyde daraltarak altındaki tabloya aynı sayfada yer açıyoruz
-                img_height = 250 if fig_key == "SII Gauge" else 400
+                # SII grafiklerini dikeyde biraz daha daraltarak altındaki tabloya aynı sayfada yer açıyoruz (Ferah görünüm)
+                img_height = 300 if fig_key == "SII Gauge" else 400
                 
                 with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp_img:
                     time.sleep(0.5) # Kaleido rendering delay safety
@@ -296,13 +297,13 @@ if PDF_ENABLED:
                 
                 os.remove(tmp_img_path)
                 
-                # Band grafiğini SII Gauge ile aynı sayfaya koyalım
+                # Band grafiğini SII Gauge ile aynı sayfaya koyalım (Kopya sayfa oluşturma hatası giderildi)
                 if fig_key == "SII Gauge" and "SII Bands" in report_data["figures"]:
                     fig2 = report_data["figures"]["SII Bands"]
                     with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp_img2:
                         time.sleep(0.5)
-                        # Sütun grafiğini de daraltıp (350 -> 220) tablonun tek sayfaya sığmasını garantiliyoruz
-                        fig2.write_image(tmp_img2.name, format="png", engine="kaleido", width=800, height=220)
+                        # Sütun grafiğini basık göstermeyecek şekilde optimum 260px'e ayarlıyoruz
+                        fig2.write_image(tmp_img2.name, format="png", engine="kaleido", width=800, height=260)
                         pdf.image(tmp_img2.name, x=10, w=190)
                         tmp_img_path2 = tmp_img2.name
                     os.remove(tmp_img_path2)
@@ -319,9 +320,8 @@ if PDF_ENABLED:
                         
                         pdf.ln(5)
                         
-                        # Sayfa sonuna yaklaşıldıysa tabloyu bölmemek için yeni sayfaya geç
-                        # Eşik değerini 220'den 240'a çıkararak alt sınır toleransını artırdık
-                        if pdf.get_y() > 240:
+                        # Sayfa sonuna yaklaşıldıysa tabloyu bölmemek için yeni sayfaya geç (Tolerans yüksek tutuldu)
+                        if pdf.get_y() > 250:
                             pdf.add_page()
                             
                         # Ana Başlık: TEŞHİS
@@ -340,7 +340,7 @@ if PDF_ENABLED:
                         pdf.cell(95, 6, clean_text_for_fpdf(short_labelA), border=1, fill=True, align='C')
                         pdf.cell(95, 6, clean_text_for_fpdf(short_labelB), border=1, fill=True, ln=True, align='C')
                         
-                        # İçerikler: A ve B (Yan Yana)
+                        # İçerikler: A ve B (Yan Yana Izgara Sistemi)
                         pdf.set_font("Arial", '', 10)
                         start_y = pdf.get_y()
                         start_x = 10
@@ -358,7 +358,7 @@ if PDF_ENABLED:
                         
                         max_y = max(yA, yB)
                         
-                        # Dış çerçeveleri maksimum yüksekliğe göre çiz
+                        # Dış çerçeveleri maksimum yüksekliğe göre çiz (Taşmaları önler)
                         pdf.rect(start_x, start_y, 95, max_y - start_y)
                         pdf.rect(start_x + 95, start_y, 95, max_y - start_y)
                         
@@ -369,7 +369,8 @@ if PDF_ENABLED:
                         pdf.set_font("Arial", 'B', 11)
                         pdf.set_fill_color(200, 0, 0)
                         pdf.set_text_color(255, 255, 255)
-                        pdf.cell(190, 8, clean_text_for_fpdf(labelComp), border=1, fill=True, ln=True, align='C')
+                        comp_title = "KARŞILAŞTIRMA" if lang == "tr" else "COMPARISON"
+                        pdf.cell(190, 8, clean_text_for_fpdf(comp_title), border=1, fill=True, ln=True, align='C')
                         
                         # Karşılaştırma İçeriği (Birleşik Tek Sütun)
                         pdf.set_font("Arial", '', 10)
@@ -832,7 +833,9 @@ if st.session_state.app_mode == "single":
         col_gauge, col_bar = st.columns(2)
         with col_gauge:
             fig_gauge = go.Figure(go.Indicator(
-                mode="gauge+number", value=sii_percent, title={'text': "SII Skoru"}, domain={'x': [0, 1], 'y': [0, 1]},
+                mode="gauge+number", value=sii_percent, 
+                title={'text': f"<span style='font-size:18px;color:#212529'>SII Skoru</span>"}, 
+                domain={'x': [0, 1], 'y': [0, 1]},
                 gauge={
                     'axis': {'range': [0, 100], 'tickwidth': 1, 'tickcolor': "darkblue"},
                     'bar': {'color': color_sii},
@@ -844,7 +847,7 @@ if st.session_state.app_mode == "single":
                     ]
                 }
             ))
-            fig_gauge.update_layout(height=400, margin=dict(l=30, r=30, t=50, b=30))
+            fig_gauge.update_layout(height=400, margin=dict(t=50, b=30))
             st.plotly_chart(fig_gauge, use_container_width=True)
             report_data["figures"]["SII Gauge"] = fig_gauge
 
@@ -859,7 +862,7 @@ if st.session_state.app_mode == "single":
 
         st.markdown(t("### 🤖 Akıllı Teşhis", "### 🤖 Auto-Interpretation"))
         if sii_percent >= 75: 
-            diag_tr = "Makine çalışma gürültüsü, insan iletişimini engellemiyor. İş güvenliği açısından %100 güvenli ve konforlu bölge."
+            diag_tr = "Makine çalışma gürültüsü, insan iletişimini engirmiyor. İş güvenliği açısından %100 güvenli ve konforlu bölge."
             diag_en = "Machine operating noise does not hinder human communication. 100% safe and comfortable zone in terms of occupational safety."
         elif sii_percent >= 45: 
             diag_tr = "Makine gürültüsü konuşmaları kısmen maskeliyor. Etkili iletişim kurmak için personelin ses yükseltmesi gerekebilir."
@@ -1155,25 +1158,30 @@ elif st.session_state.app_mode == "compare":
         sii_df_B = compute_octave_sii(oct_B, speech_efforts_map[selected_eff_comp])
         sii_pct_B = float(sii_df_B["contribution"].sum()) * 100.0
 
-        fig_gauge_comp = make_subplots(rows=1, cols=2, specs=[[{'type': 'indicator'}, {'type': 'indicator'}]], subplot_titles=(f"A: {uploaded_files[0].name}", f"B: {uploaded_files[1].name}"))
+        # Subplot title'larını kaldırdık, çakışmayı önlemek için HTML ile indicator'ın kendi içine gömeceğiz.
+        fig_gauge_comp = make_subplots(rows=1, cols=2, specs=[[{'type': 'indicator'}, {'type': 'indicator'}]])
         
         color_A = "#28a745" if sii_pct_A >= 75 else "#ffc107" if sii_pct_A >= 45 else "#dc3545"
         color_B = "#28a745" if sii_pct_B >= 75 else "#ffc107" if sii_pct_B >= 45 else "#dc3545"
 
-        fig_gauge_comp.add_trace(go.Indicator(mode="gauge+number", value=sii_pct_A, domain={'x': [0, 1], 'y': [0, 1]},
+        fig_gauge_comp.add_trace(go.Indicator(mode="gauge+number", value=sii_pct_A, 
+            title={'text': f"<span style='font-size:14px;color:gray'>{uploaded_files[0].name}</span><br><span style='font-size:18px;color:#212529'>SII A</span>"},
+            domain={'x': [0, 1], 'y': [0, 1]},
             gauge={'axis': {'range': [0, 100], 'tickwidth': 1, 'tickcolor': "darkblue"}, 'bar': {'color': color_A}, 'bgcolor': "white", 'borderwidth': 2, 'bordercolor': "gray", 'steps': [{'range': [0, 45], 'color': 'rgba(220, 53, 69, 0.3)'}, {'range': [45, 75], 'color': 'rgba(255, 193, 7, 0.3)'}, {'range': [75, 100], 'color': 'rgba(40, 167, 69, 0.3)'}]}
         ), row=1, col=1)
-        fig_gauge_comp.add_trace(go.Indicator(mode="gauge+number", value=sii_pct_B, domain={'x': [0, 1], 'y': [0, 1]},
+        fig_gauge_comp.add_trace(go.Indicator(mode="gauge+number", value=sii_pct_B, 
+            title={'text': f"<span style='font-size:14px;color:gray'>{uploaded_files[1].name}</span><br><span style='font-size:18px;color:#212529'>SII B</span>"},
+            domain={'x': [0, 1], 'y': [0, 1]},
             gauge={'axis': {'range': [0, 100], 'tickwidth': 1, 'tickcolor': "darkblue"}, 'bar': {'color': color_B}, 'bgcolor': "white", 'borderwidth': 2, 'bordercolor': "gray", 'steps': [{'range': [0, 45], 'color': 'rgba(220, 53, 69, 0.3)'}, {'range': [45, 75], 'color': 'rgba(255, 193, 7, 0.3)'}, {'range': [75, 100], 'color': 'rgba(40, 167, 69, 0.3)'}]}
         ), row=1, col=2)
-        fig_gauge_comp.update_layout(height=400, margin=dict(t=60, b=30))
+        fig_gauge_comp.update_layout(height=380, margin=dict(t=70, b=20))
         st.plotly_chart(fig_gauge_comp, use_container_width=True)
         report_data["figures"]["SII Gauge"] = fig_gauge_comp
 
         fig_sii_bands = go.Figure()
         fig_sii_bands.add_trace(go.Bar(x=[format_frequency(v) for v in sii_df_A["frequency_hz"]], y=100.0 * sii_df_A["contribution"], name="File A", marker_color="#1f77b4", marker_line_color="#10446b", marker_line_width=1))
         fig_sii_bands.add_trace(go.Bar(x=[format_frequency(v) for v in sii_df_B["frequency_hz"]], y=100.0 * sii_df_B["contribution"], name="File B", marker_color="#E61A25", marker_line_color="#B0101A", marker_line_width=1))
-        fig_sii_bands.update_layout(title="SII Katkısı (A vs B)", barmode='group', height=400, bargap=0.1, xaxis_type='category')
+        fig_sii_bands.update_layout(title="SII Katkısı (A vs B)", barmode='group', height=350, bargap=0.1, xaxis_type='category')
         st.plotly_chart(fig_sii_bands, use_container_width=True)
         report_data["figures"]["SII Bands"] = fig_sii_bands
 
