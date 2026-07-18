@@ -135,14 +135,9 @@ if st.session_state.app_mode is None:
     st.session_state.lang = "tr" if main_lang_choice == "🇹🇷 Türkçe" else "en"
     lang = st.session_state.lang # Değişimi anında yansıtmak için
 
-    if lang == "tr":
-    title_text = "GATES AR-GE GÜRÜLTÜ & AKUSTİK ANALİZ SİSTEMİ"
-else:
-    title_text = "GATES R&D NVH ANALYSIS SYSTEM"
-
-    st.markdown(f'<div class="landing-title">{title_text}</div>', unsafe_allow_html=True)
+    st.markdown('<div class="landing-title">GATES R&D NVH ANALYSIS SYSTEM</div>', unsafe_allow_html=True)
     st.markdown(f'<div class="landing-subtitle">{t("Lütfen yapmak istediğiniz analiz tipini seçin", "Please select the type of analysis you want to perform")}</div>', unsafe_allow_html=True)
- 
+    
     col1, col2, col3, col4 = st.columns([1, 3, 3, 1])
     
     with col2:
