@@ -3,6 +3,7 @@ import math
 import os
 import tempfile
 import time
+import base64
 from typing import Iterable, Optional, Sequence, Tuple
 
 import numpy as np
@@ -12,7 +13,6 @@ from plotly.subplots import make_subplots
 import streamlit as st
 from scipy.io import wavfile
 from scipy.signal import spectrogram, welch
-import base64
 
 try:
     from fpdf import FPDF
@@ -37,31 +37,6 @@ def get_base64_of_bin_file(bin_file):
         return base64.b64encode(data).decode()
     return None
 
-# CSS Enjeksiyonu
-st.markdown("""
-<style>
-    .stApp { background-color: #FFFFFF; color: #212529; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; }
-    [data-testid="stSidebar"] { background-color: #F0F0F0; border-right: 1px solid #C8C8C8; }
-    [data-testid="stSidebar"] * { color: #212529; }
-    h1, h2, h3, h4 { color: #141412 !important; font-weight: 700 !important; }
-    .stTabs [data-baseweb="tab-list"] { border-bottom: 2px solid #E0E0E0; }
-    .stTabs [aria-selected="true"] { border-bottom-color: #E61A25 !important; border-bottom-width: 3px !important; }
-    .stTabs [aria-selected="true"] p { color: #E61A25 !important; font-weight: bold; }
-    div[data-testid="stFileUploader"] > section { border-color: #C8C8C8; background-color: #F9F9F9; }
-    div[data-testid="stAlert"] { background-color: #F0F0F0; color: #212529; border-left: 5px solid #E61A25; }
-    
-    /* Ana menüdeki büyük butonların tasarımı için ufak dokunuşlar */
-    .landing-title { text-align: center; color: #252525 !important; font-size: 3rem !important; margin-bottom: 2rem; white-space: nowrap; }
-    .landing-subtitle { text-align: center; color: #555555; font-size: 1.2rem; margin-bottom: 3rem; }
-    
-    /* Dil butonunu yatayda ortala */
-    .stRadio [role=radiogroup] {
-        align-items: center;
-        justify-content: center;
-    }
-</style>
-""", unsafe_allow_html=True)
-
 # ============================================================
 # DİL SEÇİMİ VE SESSION STATE (AKIŞ KONTROLÜ)
 # ============================================================
@@ -72,7 +47,7 @@ if "analyze" not in st.session_state:
 if "pdf_ready" not in st.session_state:
     st.session_state.pdf_ready = False
 if "lang" not in st.session_state:
-    st.session_state.lang = "tr" # Başlangıç dili
+    st.session_state.lang = "tr"
 
 def reset_analysis():
     st.session_state.analyze = False
@@ -83,20 +58,108 @@ def go_to_main_menu():
     reset_analysis()
 
 # Dil Seçimi Sidebar'ın en üstünde (Sadece mod seçiliyse sidebar gösterilir)
-lang = st.session_state.lang
 if st.session_state.app_mode is not None:
     try:
         st.sidebar.image("gates_logo.png", use_container_width=True)
     except:
         pass
-    
     lang_idx = 0 if st.session_state.lang == "tr" else 1
-    lang_choice = st.sidebar.radio("🌐 Language / Dil", ["Türkçe", "English"], index=lang_idx, horizontal=True)
+    lang_choice = st.sidebar.radio("🌐 Language / Dil", ["Türkçe", "English"], index=lang_idx, horizontal=True, key="sidebar_lang")
     st.session_state.lang = "tr" if lang_choice == "Türkçe" else "en"
-    lang = st.session_state.lang
+
+# Tüm sistemde geçerli olacak global dil referansı
+lang = st.session_state.lang
 
 def t(tr_text: str, en_text: str) -> str:
-    return tr_text if lang == "tr" else en_text
+    return tr_text if st.session_state.lang == "tr" else en_text
+
+# ============================================================
+# 1. KARŞILAMA EKRANI (LANDING PAGE)
+# ============================================================
+if st.session_state.app_mode is None:
+    bg_base64 = get_base64_of_bin_file("arka_plan.jpg") or get_base64_of_bin_file("arka_plan.png")
+    
+    if bg_base64:
+        st.markdown(f"""
+        <style>
+        .stApp {{
+            background-image: url("data:image/jpeg;base64,{bg_base64}");
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+        }}
+        [data-testid="stHeader"] {{ background: rgba(0,0,0,0) !important; }}
+        </style>
+        """, unsafe_allow_html=True)
+
+    # Yazı ve butonları ekranın ALTINA iten KESİN ÇÖZÜM
+    st.markdown("""
+    <style>
+    /* Ana menüdeyken scroll olmasını tamamen engelle */
+    body, html, [data-testid="stAppViewContainer"] {
+        overflow: hidden !important;
+    }
+    /* Streamlit'in varsayılan tepe boşluğunu (padding) sıfırla ki kontrol bizde olsun */
+    .block-container { 
+        padding-top: 0rem !important; 
+        max-width: 1200px !important;
+    }
+    .landing-title { 
+        text-align: center; color: #252525 !important; font-size: 3rem !important; 
+        margin-bottom: 0.5rem; font-weight: bold; white-space: nowrap; 
+    }
+    .landing-subtitle { 
+        text-align: center; color: #555555; font-size: 1.2rem; margin-bottom: 3rem; 
+    }
+    /* Ana menüdeki dil seçimi butonunu yatayda tam ortala */
+    div[data-testid="stRadio"] > div[role="radiogroup"] {
+        justify-content: center;
+        margin: 0 auto;
+    }
+    div[data-testid="stRadio"] {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        margin-bottom: 1rem;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    # İŞTE ÇÖZÜM: Görünmez HTML bloğu. (Dil butonu yüksekliğini telafi etmek için 55vh yapıldı)
+    # Bu blok kendinden sonra gelen yazıları ve butonları zorla ekranın alt kısmına (beyaz alana) iter.
+    st.markdown('<div style="height: 55vh;"></div>', unsafe_allow_html=True)
+
+    # Ana Menü Dil Seçimi
+    lang_idx = 0 if st.session_state.lang == "tr" else 1
+    main_lang_choice = st.radio("Dil Seçimi", ["🇹🇷 Türkçe", "🇬🇧 English"], index=lang_idx, horizontal=True, label_visibility="collapsed", key="main_lang")
+    st.session_state.lang = "tr" if main_lang_choice == "🇹🇷 Türkçe" else "en"
+    lang = st.session_state.lang # Değişimi anında yansıtmak için
+
+    st.markdown('<div class="landing-title">GATES R&D NVH ANALYSIS SYSTEM</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="landing-subtitle">{t("Lütfen yapmak istediğiniz analiz tipini seçin", "Please select the type of analysis you want to perform")}</div>', unsafe_allow_html=True)
+    
+    col1, col2, col3, col4 = st.columns([1, 3, 3, 1])
+    
+    with col2:
+        if st.button(t("🔍 TEKLİ SES ANALİZİ", "🔍 SINGLE NOISE ANALYSIS"), use_container_width=True):
+            st.session_state.app_mode = "single"
+            st.rerun()
+            
+    with col3:
+        if st.button(t("⚖️ A/B KARŞILAŞTIRMA ANALİZİ", "⚖️ A/B COMPARATIVE ANALYSIS"), use_container_width=True):
+            st.session_state.app_mode = "compare"
+            st.rerun()
+            
+    st.stop()
+else:
+    # Analiz moduna geçildiğinde Landing Page'in CSS etkilerini sıfırla
+    st.markdown("""
+    <style>
+    body, html, [data-testid="stAppViewContainer"] { overflow: auto !important; }
+    .stApp { background-image: none !important; background-color: #FFFFFF !important; }
+    .block-container { padding-top: 2rem !important; max-width: 100% !important; }
+    </style>
+    """, unsafe_allow_html=True)
 
 # ============================================================
 # AKUSTİK STANDARTLAR VE SABİTLER
@@ -128,17 +191,12 @@ if PDF_ENABLED:
             self.antet_data = antet_data
             
         def header(self):
-            # İlk sayfa hariç diğer sayfaların üst anteti
             if self.page_no() > 1:
                 self.set_line_width(0.5)
-                # Kırmızı üst şerit (tam köşeye oturtuldu)
                 self.set_fill_color(200, 0, 0)
                 self.rect(10.25, 10.25, 189.5, 2, 'F')
-                
-                # Siyah Dış Çerçeve
                 self.rect(10, 10, 190, 24)
                 
-                # Logo alanı (Siyah-Beyaz Logo)
                 try:
                     self.image("gatessiyah_logo.png", x=12, y=14, w=0, h=14)
                 except:
@@ -146,25 +204,19 @@ if PDF_ENABLED:
                     self.set_xy(12, 18)
                     self.cell(40, 10, "GATES")
                     
-                # Ortada Report Yazısı
                 self.set_font("Arial", 'B', 18)
                 self.set_xy(80, 17)
                 self.cell(50, 10, "Report", align='C')
                 
-                # Sağda Report-No
                 self.set_font("Arial", 'B', 10)
                 self.set_xy(140, 14)
                 self.cell(58, 6, clean_text_for_fpdf(f"Report-No.: {self.antet_data.get('report_no', '')}"), align='R')
                 
-                # Alt gri şerit
                 self.set_fill_color(240, 240, 240)
                 self.rect(10.25, 30, 189.5, 4, 'F')
-                
-                # Çizim imlecini antetin altına alıyoruz ki grafik yazıları taşmasın
                 self.set_y(35)
 
         def footer(self):
-            # Alt kısımdan yukarıya konumlan
             self.set_y(-25)
             self.set_font("Arial", "", 8)
             self.set_line_width(0.5)
@@ -174,11 +226,9 @@ if PDF_ENABLED:
             box_w = 190
             box_h = 16 
             
-            # Dış çerçeve ve iç dikey çizgi
             self.rect(box_x, box_y, box_w, box_h)
             self.line(box_x + 160, box_y, box_x + 160, box_y + box_h)
             
-            # Sol bölüm - Metin (Yol + Geçerlilik)
             path_text = clean_text_for_fpdf(self.antet_data.get('file_path', ''))
             valid_text = "This document was created electronically and is valid without signature."
             combined_text = f"{path_text}\n{valid_text}"
@@ -187,13 +237,10 @@ if PDF_ENABLED:
             line_height = 4
             text_total_height = num_lines * line_height
             
-            # Dikey ortalama hesabı
             start_y = box_y + (box_h - text_total_height) / 2.0
-            
             self.set_xy(box_x, start_y)
             self.multi_cell(160, line_height, combined_text, align='C')
             
-            # Sağ bölüm - Sayfa Numarası
             self.set_xy(box_x + 160, box_y)
             self.cell(30, box_h, f"Page: {self.page_no()} of {{nb}}", align='C')
 
@@ -203,31 +250,23 @@ if PDF_ENABLED:
         pdf.set_auto_page_break(auto=True, margin=30)
         pdf.add_page()
         
-        # --- İLK SAYFA ANTETİ ---
         pdf.set_line_width(0.5)
+        pdf.rect(10, 10, 190, 30) 
+        pdf.rect(10, 40, 190, 14) 
+        pdf.rect(10, 54, 190, 10) 
+        pdf.rect(10, 64, 190, 16) 
+        pdf.rect(10, 80, 190, 10) 
         
-        # Dış Çerçeve ve Kutular (Çizgiler)
-        # Önce dış çerçeveyi çiziyoruz ki kırmızı şerit üstüne binip köşeleri bozmasın
-        pdf.rect(10, 10, 190, 30) # Logo ve Rapor Numarası Bloğu (H: 30mm)
-        pdf.rect(10, 40, 190, 14) # Subject Bloğu
-        pdf.rect(10, 54, 190, 10) # Date/Location Bloğu
-        pdf.rect(10, 64, 190, 16) # Author/Dept Bloğu
-        pdf.rect(10, 80, 190, 10) # Distribution Bloğu
-        
-        # Kırmızı üst şerit (İnce: 2mm, Çerçevenin iç kenarına milimetrik hizalandı)
         pdf.set_fill_color(200, 0, 0)
         pdf.rect(10.25, 10.25, 189.5, 2, 'F')
         
-        # Gri alt şerit (Önce çizilir ki siyah çerçeve üstte kalsın)
         pdf.set_fill_color(240, 240, 240)
         pdf.rect(10.25, 36, 189.5, 4, 'F')
         
-        # Dikey Ayırıcı Çizgiler (Seperatörler)
-        pdf.line(42, 54, 42, 90)   # Sol etiketlerin (Date, Author, Dist) ayırıcısı
-        pdf.line(125, 54, 125, 80) # Orta ayırıcı (Location, Dept)
-        pdf.line(152, 54, 152, 80) # Sağ etiketlerin ayırıcısı (Artık kelime taşımasın diye 152'de)
+        pdf.line(42, 54, 42, 90)   
+        pdf.line(125, 54, 125, 80) 
+        pdf.line(152, 54, 152, 80) 
         
-        # Logo
         try:
             pdf.image("gatessiyah_logo.png", x=12, y=14, w=0, h=16)
         except:
@@ -235,7 +274,6 @@ if PDF_ENABLED:
             pdf.set_xy(12, 19)
             pdf.cell(40, 10, "GATES")
             
-        # Report ve Report-No yazıları
         pdf.set_font("Arial", 'B', 20)
         pdf.set_xy(80, 20)
         pdf.cell(50, 10, "Report", align='C')
@@ -243,9 +281,7 @@ if PDF_ENABLED:
         pdf.set_xy(140, 16)
         pdf.cell(58, 6, clean_text_for_fpdf(f"Report-No.: {antet_data.get('report_no', '')}"), align='R')
         
-        # Antet Metinleri (Hücre İçerikleri)
         pdf.set_font("Arial", '', 10)
-        
         pdf.set_xy(11, 44)
         pdf.cell(30, 6, "Subject:")
         pdf.set_font("Arial", 'B', 14)
@@ -282,11 +318,8 @@ if PDF_ENABLED:
         pdf.set_xy(43, 82)
         pdf.cell(146, 6, clean_text_for_fpdf(antet_data.get('distribution', '')))
         
-        # İçeriğin antetin altına taşmaması için kalem Y pozisyonunu güncelliyoruz
         pdf.set_y(100)
         
-        # --- GRAFİKLER VE TEŞHİSLER ---
-        # Compare ve Single modlarında basılacak grafik isimleri
         sections = [
             ("Color Map", "Color Map"), 
             ("Color Map (A - Referans)", "NONE"), 
@@ -306,23 +339,20 @@ if PDF_ENABLED:
                 pdf.cell(0, 10, clean_text_for_fpdf(title_text), ln=True)
                 
                 fig = report_data["figures"][fig_key]
-                # SII grafiklerini dikeyde biraz daha daraltarak altındaki tabloya aynı sayfada yer açıyoruz (Ferah görünüm)
                 img_height = 300 if fig_key == "SII Gauge" else 400
                 
                 with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp_img:
-                    time.sleep(0.5) # Kaleido rendering delay safety
+                    time.sleep(0.5) 
                     fig.write_image(tmp_img.name, format="png", engine="kaleido", width=800, height=img_height, scale=4)
                     pdf.image(tmp_img.name, x=10, w=190)
                     tmp_img_path = tmp_img.name
                 
                 os.remove(tmp_img_path)
                 
-                # Band grafiğini SII Gauge ile aynı sayfaya koyalım (Kopya sayfa oluşturma hatası giderildi)
                 if fig_key == "SII Gauge" and "SII Bands" in report_data["figures"]:
                     fig2 = report_data["figures"]["SII Bands"]
                     with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp_img2:
                         time.sleep(0.5)
-                        # Sütun grafiğini basık göstermeyecek şekilde optimum 260px'e ayarlıyoruz
                         fig2.write_image(tmp_img2.name, format="png", engine="kaleido", width=800, height=260, scale=4)
                         pdf.image(tmp_img2.name, x=10, w=190)
                         tmp_img_path2 = tmp_img2.name
@@ -340,18 +370,15 @@ if PDF_ENABLED:
                         
                         pdf.ln(5)
                         
-                        # Sayfa sonuna yaklaşıldıysa tabloyu bölmemek için yeni sayfaya geç (Tolerans yüksek tutuldu)
                         if pdf.get_y() > 250:
                             pdf.add_page()
                             
-                        # Ana Başlık: TEŞHİS
                         pdf.set_font("Arial", 'B', 12)
                         pdf.set_fill_color(200, 0, 0)
                         pdf.set_text_color(255, 255, 255)
                         diag_title = "TEŞHİS / DIAGNOSIS" if lang == "tr" else "DIAGNOSIS"
                         pdf.cell(190, 8, clean_text_for_fpdf(diag_title), border=1, fill=True, ln=True, align='C')
                         
-                        # A ve B Sütun Başlıkları
                         pdf.set_font("Arial", 'B', 10)
                         pdf.set_fill_color(240, 240, 240)
                         pdf.set_text_color(0, 0, 0)
@@ -360,39 +387,32 @@ if PDF_ENABLED:
                         pdf.cell(95, 6, clean_text_for_fpdf(short_labelA), border=1, fill=True, align='C')
                         pdf.cell(95, 6, clean_text_for_fpdf(short_labelB), border=1, fill=True, ln=True, align='C')
                         
-                        # İçerikler: A ve B (Yan Yana Izgara Sistemi)
                         pdf.set_font("Arial", '', 10)
                         start_y = pdf.get_y()
                         start_x = 10
                         padding = 2
                         
-                        # A Hücresi
                         pdf.set_xy(start_x + padding, start_y + padding)
                         pdf.multi_cell(95 - 2*padding, 5, clean_text_for_fpdf(descA), border=0, align='L')
                         yA = pdf.get_y() + padding
                         
-                        # B Hücresi
                         pdf.set_xy(start_x + 95 + padding, start_y + padding)
                         pdf.multi_cell(95 - 2*padding, 5, clean_text_for_fpdf(descB), border=0, align='L')
                         yB = pdf.get_y() + padding
                         
                         max_y = max(yA, yB)
                         
-                        # Dış çerçeveleri maksimum yüksekliğe göre çiz (Taşmaları önler)
                         pdf.rect(start_x, start_y, 95, max_y - start_y)
                         pdf.rect(start_x + 95, start_y, 95, max_y - start_y)
                         
-                        # İmleci Alt Satıra (Karşılaştırma Başlığına) İndir
                         pdf.set_y(max_y)
                         
-                        # Karşılaştırma Başlığı
                         pdf.set_font("Arial", 'B', 11)
                         pdf.set_fill_color(200, 0, 0)
                         pdf.set_text_color(255, 255, 255)
                         comp_title = "KARŞILAŞTIRMA" if lang == "tr" else "COMPARISON"
                         pdf.cell(190, 8, clean_text_for_fpdf(comp_title), border=1, fill=True, ln=True, align='C')
                         
-                        # Karşılaştırma İçeriği (Birleşik Tek Sütun)
                         pdf.set_font("Arial", '', 10)
                         pdf.set_text_color(0, 0, 0)
                         comp_start_y = pdf.get_y()
@@ -401,15 +421,12 @@ if PDF_ENABLED:
                         pdf.multi_cell(190 - 2*padding, 5, clean_text_for_fpdf(descComp), border=0, align='L')
                         comp_max_y = pdf.get_y() + padding
                         
-                        # Dış çerçeveyi çiz
                         pdf.rect(start_x, comp_start_y, 190, comp_max_y - comp_start_y)
                         
-                        # Bir sonraki blok için imleci aşağı al
                         pdf.set_y(comp_max_y)
                     elif isinstance(diag_data, list):
-                        pass # Yanlış format geldiğinde atla
+                        pass 
                     else:
-                        # Tekli mod stili (Düz metin)
                         pdf.set_font("Arial", '', 11)
                         diag_text = ("Teşhis: " if lang == "tr" else "Diagnosis: ") + str(diag_data)
                         pdf.multi_cell(0, 6, clean_text_for_fpdf(diag_text))
@@ -595,144 +612,14 @@ def bin_tracks_by_rpm(rpm_values: np.ndarray, tracks: dict[float, np.ndarray], r
     return result.dropna(subset=value_columns, how="all")
 
 # ============================================================
-# 1. KARŞILAMA EKRANI (LANDING PAGE)
-# ============================================================
-if st.session_state.app_mode is None:
-    # Arka plan resmi kontrolü
-    bg_base64 = get_base64_of_bin_file("arka_plan.jpg") or get_base64_of_bin_file("arka_plan.png")
-    
-    if bg_base64:
-        bg_css = f"""
-        <style>
-        .stApp {{
-            background-image: url("data:image/jpeg;base64,{bg_base64}");
-            background-size: cover;
-            background-position: center;
-            background-repeat: no-repeat;
-            background-attachment: fixed;
-        }}
-        </style>
-        """
-    else:
-        bg_css = ""
-
-    # Ana Menüye özel CSS (Sidebar'ı ve Scroll'u gizle, öğeleri aşağı hizala)
-    landing_css = f"""
-    {bg_css}
-    <style>
-    /* Scroll (Kaydırma) İşlemini Kapat */
-    body, html {{
-        overflow: hidden !important;
-    }}
-    .stApp {{
-        overflow: hidden !important;
-    }}
-    
-    [data-testid="stSidebar"] {{ display: none !important; }}
-    [data-testid="collapsedControl"] {{ display: none !important; }}
-    header[data-testid="stHeader"] {{ display: none !important; }}
-    
-    .block-container {{
-        padding-top: 1rem !important; /* Gerçek boşluğu aşağıdaki div yapacak */
-        max-width: 1200px !important;
-        margin: 0 auto;
-    }}
-    
-    div.stButton > button {{
-        height: 70px;
-        border: 1px solid #ccc;
-        background-color: rgba(255, 255, 255, 0.95);
-        color: #333;
-        border-radius: 8px;
-        transition: all 0.3s ease;
-    }}
-    div.stButton > button p {{
-        font-size: 1.1rem;
-        font-weight: 500;
-    }}
-    div.stButton > button:hover {{
-        border-color: #E61A25;
-        color: #E61A25;
-        box-shadow: 0 4px 15px rgba(230, 26, 37, 0.15);
-        background-color: white;
-    }}
-    .landing-title { 
-        text-align: center; color: #252525 !important; font-size: 3rem !important; margin-bottom: 2rem; white-space: nowrap; 
-    }
-    .landing-subtitle { 
-        text-align: center; color: #555555; font-size: 1.2rem; margin-bottom: 3rem; 
-    }
-    /* Ana menüdeki dil seçimi butonunu yatayda tam ortala */
-    div[data-testid="stRadio"] > div[role="radiogroup"] {
-        justify-content: center;
-        margin: 0 auto;
-    }
-    div[data-testid="stRadio"] {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        margin-bottom: 1rem;
-    }
-    </style>
-    """
-    st.markdown(landing_css, unsafe_allow_html=True)
-
-    # İŞTE ÇÖZÜM: Görünmez HTML bloğu. (Dil butonu yüksekliğini telafi etmek için 55vh yapıldı)
-    # Bu blok kendinden sonra gelen yazıları ve butonları zorla ekranın alt kısmına (beyaz alana) iter.
-    st.markdown('<div style="height: 55vh;"></div>', unsafe_allow_html=True)
-
-    # Ana Menü Dil Seçimi
-    lang_idx = 0 if st.session_state.lang == "tr" else 1
-    main_lang_choice = st.radio("Dil Seçimi", ["🇹🇷 Türkçe", "🇬🇧 English"], index=lang_idx, horizontal=True, label_visibility="collapsed", key="main_lang")
-    st.session_state.lang = "tr" if main_lang_choice == "🇹🇷 Türkçe" else "en"
-    lang = st.session_state.lang # Değişimi anında yansıtmak için
-
-    # Dil seçimine göre başlığı belirleme
-    if lang == "tr":
-        title_text = "GATES AR-GE GÜRÜLTÜ & AKUSTİK ANALİZ SİSTEMİ"
-    else:
-        title_text = "GATES R&D NVH ANALYSIS SYSTEM"
-
-    st.markdown(f'<div class="landing-title">{title_text}</div>', unsafe_allow_html=True)
-    
-    st.markdown(f'<div class="landing-subtitle">{t("Lütfen yapmak istediğiniz analiz tipini seçin", "Please select the type of analysis you want to perform")}</div>', unsafe_allow_html=True)
-    
-    col1, col2, col3, col4 = st.columns([1, 3, 3, 1])
-    
-    with col2:
-        if st.button(t("🔍 TEKLİ SES ANALİZİ\n(Single Analysis)", "🔍 SINGLE NOISE ANALYSIS\n(Standard)"), use_container_width=True):
-            st.session_state.app_mode = "single"
-            st.rerun()
-            
-    with col3:
-        if st.button(t("⚖️ A/B KARŞILAŞTIRMA ANALİZİ\n(Comparative Analysis)", "⚖️ A/B COMPARATIVE ANALYSIS\n(Reference vs Test)"), use_container_width=True):
-            st.session_state.app_mode = "compare"
-            st.rerun()
-            
-    st.stop()
-else:
-    # --- CSS RESET (Analiz Modunda Streamlit Orijinaline Dönüş) ---
-    st.markdown("""
-    <style>
-    body, html {
-        overflow: auto !important;
-    }
-    .stApp {
-        background-image: none !important;
-        background-color: #FFFFFF !important;
-        overflow: auto !important;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-
-# ============================================================
 # ORTAK YAN MENÜ (SIDEBAR) BİLEŞENLERİ
 # ============================================================
-st.sidebar.button(t("⬅️ Ana Menüye Dön", "⬅️ Back to Main Menu"), on_click=go_to_main_menu, use_container_width=True)
-st.sidebar.markdown("---")
+if st.session_state.app_mode is not None:
+    st.sidebar.button(t("⬅️ Ana Menüye Dön", "⬅️ Back to Main Menu"), on_click=go_to_main_menu, use_container_width=True)
+    st.sidebar.markdown("---")
 
-st.title(t("🔊 Gürültü ve Akustik Analiz Sistemi (NVH)", "🔊 Noise and Acoustic Analysis System (NVH)"))
-st.caption("COLOR MAPS • ORDER PLOTS • ARTICULATION INDEX / SII • 1/3 OCTAVE BAND PLOTS")
+    st.title(t("🔊 Gürültü ve Akustik Analiz Sistemi (NVH)", "🔊 Noise and Acoustic Analysis System (NVH)"))
+    st.caption("COLOR MAPS • ORDER PLOTS • ARTICULATION INDEX / SII • 1/3 OCTAVE BAND PLOTS")
 
 # PDF DİALOG MODÜLÜ
 @st.dialog(t("📄 PDF Rapor Bilgilerini Girin", "📄 Enter PDF Report Information"))
@@ -1119,7 +1006,6 @@ elif st.session_state.app_mode == "compare":
 
     tab_color, tab_order, tab_ai, tab_octave = st.tabs(["🌈 COLOR MAPS", "🏎️ ORDER PLOTS (A vs B)", "🧠 SII (A vs B)", "🎼 1/3 OCTAVE (A vs B)"])
 
-    # --- COLOR MAPS ---
     with tab_color:
         stft_size_A = choose_segment_size(sig_A.size, 4096)
         sf_A, st_A, spsd_A = spectrogram(sig_A, fs=sr_A, window="hann", nperseg=stft_size_A, noverlap=int(stft_size_A * 0.75), mode="psd")
@@ -1148,7 +1034,6 @@ elif st.session_state.app_mode == "compare":
         db_matrix_A = slvl_A[mask_A, :]
         db_matrix_B = slvl_B[mask_B, :]
         
-        # A Dosyası Teşhisi
         time_var_A = np.var(np.mean(db_matrix_A, axis=0))
         freq_var_A = np.var(np.mean(db_matrix_A, axis=1))
         if time_var_A > freq_var_A * 1.5:
@@ -1158,7 +1043,6 @@ elif st.session_state.app_mode == "compare":
         else:
             diag_A_tr, diag_A_en = "Karmaşık geniş bantlı gürültü profili gözlemleniyor.", "Complex broadband noise profile is observed."
 
-        # B Dosyası Teşhisi
         time_var_B = np.var(np.mean(db_matrix_B, axis=0))
         freq_var_B = np.var(np.mean(db_matrix_B, axis=1))
         if time_var_B > freq_var_B * 1.5:
@@ -1168,7 +1052,6 @@ elif st.session_state.app_mode == "compare":
         else:
             diag_B_tr, diag_B_en = "Karmaşık geniş bantlı gürültü profili gözlemleniyor.", "Complex broadband noise profile is observed."
 
-        # Karşılaştırma Teşhisi
         mean_db_A = np.mean(db_matrix_A)
         mean_db_B = np.mean(db_matrix_B)
         diff_mean = mean_db_B - mean_db_A
@@ -1203,7 +1086,6 @@ elif st.session_state.app_mode == "compare":
             (t("KARŞILAŞTIRMA", "COMPARISON"), t(diag_comp_tr, diag_comp_en))
         ]
 
-    # --- ORDER PLOTS ---
     with tab_order:
         rot_hz = float(fixed_rpm) / 60.0
         max_ord = st.slider(t("Gösterilecek maksimum order", "Maximum order to display"), 1.0, 10.0, 5.0, 0.5)
@@ -1272,7 +1154,6 @@ elif st.session_state.app_mode == "compare":
                 (t("KARŞILAŞTIRMA", "COMPARISON"), t(diag_comp_tr, diag_comp_en))
             ]
 
-    # --- SII COMP ---
     with tab_ai:
         speech_efforts_map = {
             t("Normal", "Normal"): np.array([34.75, 34.27, 25.01, 17.32, 9.33, 1.13]),
@@ -1288,7 +1169,6 @@ elif st.session_state.app_mode == "compare":
         sii_df_B = compute_octave_sii(oct_B, speech_efforts_map[selected_eff_comp])
         sii_pct_B = float(sii_df_B["contribution"].sum()) * 100.0
 
-        # Subplot title'larını kaldırdık, çakışmayı önlemek için HTML ile indicator'ın kendi içine gömeceğiz.
         fig_gauge_comp = make_subplots(rows=1, cols=2, specs=[[{'type': 'indicator'}, {'type': 'indicator'}]])
         
         color_A = "#28a745" if sii_pct_A >= 75 else "#ffc107" if sii_pct_A >= 45 else "#dc3545"
@@ -1311,7 +1191,7 @@ elif st.session_state.app_mode == "compare":
         fig_sii_bands = go.Figure()
         fig_sii_bands.add_trace(go.Bar(x=[format_frequency(v) for v in sii_df_A["frequency_hz"]], y=100.0 * sii_df_A["contribution"], name="File A", marker_color="#1f77b4", marker_line_color="#10446b", marker_line_width=1))
         fig_sii_bands.add_trace(go.Bar(x=[format_frequency(v) for v in sii_df_B["frequency_hz"]], y=100.0 * sii_df_B["contribution"], name="File B", marker_color="#E61A25", marker_line_color="#B0101A", marker_line_width=1))
-        fig_sii_bands.update_layout(title="SII Katkısı (A vs B)", barmode='group', height=350, bargap=0.1, xaxis_type='category')
+        fig_sii_bands.update_layout(title="SII Katkısı (A vs B)" if lang=="TR" else "SII Contributions (A vs B)", barmode='group', height=350, bargap=0.1, xaxis_type='category')
         st.plotly_chart(fig_sii_bands, use_container_width=True)
         report_data["figures"]["SII Bands"] = fig_sii_bands
 
@@ -1352,7 +1232,6 @@ elif st.session_state.app_mode == "compare":
             (t("KARŞILAŞTIRMA", "COMPARISON"), t(diag_comp_tr, diag_comp_en))
         ]
 
-    # --- OCTAVE COMP ---
     with tab_octave:
         oct_df_A = third_oct_A[third_oct_A["exact_hz"] <= max_display_frequency].copy()
         oct_df_B = third_oct_B[third_oct_B["exact_hz"] <= max_display_frequency].copy()
