@@ -22,7 +22,11 @@ except ImportError:
 
 try:
     from docx import Document
-    from docx.shared import Cm
+    from docx.shared import Cm, Pt, RGBColor
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.enum.table import WD_ALIGN_VERTICAL
+    from docx.oxml.ns import nsdecls
+    from docx.oxml import parse_xml
     DOCX_ENABLED = True
 except ImportError:
     DOCX_ENABLED = False
@@ -99,14 +103,11 @@ if st.session_state.app_mode is None:
         </style>
         """, unsafe_allow_html=True)
 
-    # Yazı ve butonları ekranın ALTINA iten KESİN ÇÖZÜM
     st.markdown("""
     <style>
-    /* Ana menüdeyken scroll olmasını tamamen engelle */
     body, html, [data-testid="stAppViewContainer"] {
         overflow: hidden !important;
     }
-    /* Streamlit'in varsayılan tepe boşluğunu (padding) sıfırla ki kontrol bizde olsun */
     .block-container { 
         padding-top: 0rem !important; 
         max-width: 1200px !important;
@@ -118,7 +119,6 @@ if st.session_state.app_mode is None:
     .landing-subtitle { 
         text-align: center; color: #555555; font-size: 1.2rem; margin-bottom: 3rem; 
     }
-    /* Ana menüdeki dil seçimi butonunu yatayda tam ortala */
     div[data-testid="stRadio"] > div[role="radiogroup"] {
         justify-content: center;
         margin: 0 auto;
@@ -132,15 +132,12 @@ if st.session_state.app_mode is None:
     </style>
     """, unsafe_allow_html=True)
 
-    # İŞTE ÇÖZÜM: Görünmez HTML bloğu. (Dil butonu yüksekliğini telafi etmek için 55vh yapıldı)
-    # Bu blok kendinden sonra gelen yazıları ve butonları zorla ekranın alt kısmına (beyaz alana) iter.
     st.markdown('<div style="height: 55vh;"></div>', unsafe_allow_html=True)
 
-    # Ana Menü Dil Seçimi
     lang_idx = 0 if st.session_state.lang == "tr" else 1
     main_lang_choice = st.radio("Dil Seçimi", ["🇹🇷 Türkçe", "🇬🇧 English"], index=lang_idx, horizontal=True, label_visibility="collapsed", key="main_lang")
     st.session_state.lang = "tr" if main_lang_choice == "🇹🇷 Türkçe" else "en"
-    lang = st.session_state.lang # Değişimi anında yansıtmak için
+    lang = st.session_state.lang
 
     title_text = "GATES AR-GE GÜRÜLTÜ & AKUSTİK ANALİZ SİSTEMİ" if st.session_state.lang == "tr" else "GATES R&D NVH ANALYSIS SYSTEM"
     st.markdown(f'<div class="landing-title">{title_text}</div>', unsafe_allow_html=True)
@@ -160,7 +157,6 @@ if st.session_state.app_mode is None:
             
     st.stop()
 else:
-    # Analiz moduna geçildiğinde Landing Page'in CSS etkilerini sıfırla
     st.markdown("""
     <style>
     body, html, [data-testid="stAppViewContainer"] { overflow: auto !important; }
@@ -450,16 +446,58 @@ if PDF_ENABLED:
         os.remove(tmp_pdf_path)
         return pdf_bytes
 
+def set_cell_background(cell, fill_color):
+    """Word hücresine arka plan rengi ekler."""
+    tc_pr = cell._tc.get_or_add_tcPr()
+    shading_obj = parse_xml(f'<w:shd {nsdecls("w")} w:fill="{fill_color}"/>')
+    tc_pr.append(shading_obj)
+
 if DOCX_ENABLED:
     def build_docx_report(report_data, antet_data):
         doc = Document()
         
-        # Heading
-        doc.add_heading(t("GATES R&D NVH Analiz Raporu", "GATES R&D NVH Analysis Report"), level=0)
+        # Word Sayfa Kenar Boşluklarını PDF'e Benzetmek İçin Daraltıyoruz (1.27 cm = 0.5 inches)
+        sections = doc.sections
+        for section in sections:
+            section.top_margin = Cm(1.27)
+            section.bottom_margin = Cm(2.54)
+            section.left_margin = Cm(1.27)
+            section.right_margin = Cm(1.27)
+            
+            # Altbilgi (Footer) Ayarları
+            footer = section.footer
+            footer_para = footer.paragraphs[0]
+            footer_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            
+            path_text = clean_text_for_fpdf(antet_data.get('file_path', ''))
+            valid_text = "This document was created electronically and is valid without signature."
+            
+            # Üstüne çizgi çekmek için ince bir border mantığı veya düz çizgi eklenebilir
+            # Basitçe metin ekliyoruz, aralarına çizgi hissi için underscore atılabilir
+            run = footer_para.add_run("_________________________________________________________________\n")
+            run.font.size = Pt(8)
+            run.font.color.rgb = RGBColor(128, 128, 128)
+            
+            run2 = footer_para.add_run(f"{path_text}\n{valid_text}")
+            run2.font.size = Pt(8)
+            run2.font.color.rgb = RGBColor(80, 80, 80)
         
-        # Information Table
+        # Heading (Kırmızı renk ve çerçeve hissi)
+        h0 = doc.add_heading('', level=0)
+        run_h0 = h0.add_run(t("GATES R&D NVH Analiz Raporu", "GATES R&D NVH Analysis Report"))
+        run_h0.font.color.rgb = RGBColor(200, 0, 0)
+        h0.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        
+        # Information Table (PDF Antet Şıklığı)
         table = doc.add_table(rows=6, cols=2)
         table.style = 'Table Grid'
+        table.autofit = False
+        
+        # Sütun genişliklerini ayarla (Sol taraf başlıklar için dar)
+        for row in table.rows:
+            row.cells[0].width = Cm(4.0)
+            row.cells[1].width = Cm(13.0)
+
         info_list = [
             ("Subject:", antet_data.get('subject', '')), 
             ("Date:", antet_data.get('date', '')), 
@@ -471,13 +509,28 @@ if DOCX_ENABLED:
         
         for i, (k, v) in enumerate(info_list):
             row_cells = table.rows[i].cells
-            row_cells[0].text = k
-            row_cells[1].text = clean_text_for_fpdf(v)
+            
+            # Sol Hücre (Başlıklar - Koyu gri arkaplan)
+            set_cell_background(row_cells[0], "F0F0F0")
+            row_cells[0].vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+            p1 = row_cells[0].paragraphs[0]
+            r1 = p1.add_run(k)
+            r1.bold = True
+            
+            # Sağ Hücre (İçerik)
+            row_cells[1].vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+            p2 = row_cells[1].paragraphs[0]
+            if i == 0: # Subject kalın olsun
+                r2 = p2.add_run(clean_text_for_fpdf(v))
+                r2.bold = True
+                r2.font.size = Pt(12)
+            else:
+                p2.add_run(clean_text_for_fpdf(v))
             
         doc.add_paragraph()
         
         # Figures and Diagnostics
-        sections = [
+        sections_figs = [
             ("Color Map", "Color Map"), 
             ("Color Map (A - Referans)", "NONE"), 
             ("Color Map (B - Test)", "Color Map (B - Test)"),
@@ -486,10 +539,10 @@ if DOCX_ENABLED:
             ("1/3 Octave", "1/3 Octave")
         ]
 
-        for fig_key, diag_key in sections:
+        for fig_key, diag_key in sections_figs:
             if fig_key in report_data["figures"]:
                 title_text = "Articulation Index / SII Analysis" if fig_key == "SII Gauge" else fig_key
-                doc.add_heading(clean_text_for_fpdf(title_text), level=1)
+                h1 = doc.add_heading(clean_text_for_fpdf(title_text), level=1)
                 
                 fig = report_data["figures"][fig_key]
                 img_height = 300 if fig_key == "SII Gauge" else 400
@@ -497,7 +550,9 @@ if DOCX_ENABLED:
                 with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp_img:
                     time.sleep(0.5) 
                     fig.write_image(tmp_img.name, format="png", engine="kaleido", width=800, height=img_height, scale=4)
-                    doc.add_picture(tmp_img.name, width=Cm(16))
+                    para_img = doc.add_paragraph()
+                    para_img.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                    para_img.add_run().add_picture(tmp_img.name, width=Cm(16.5))
                     tmp_img_path = tmp_img.name
                 
                 os.remove(tmp_img_path)
@@ -507,11 +562,13 @@ if DOCX_ENABLED:
                     with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp_img2:
                         time.sleep(0.5)
                         fig2.write_image(tmp_img2.name, format="png", engine="kaleido", width=800, height=260, scale=4)
-                        doc.add_picture(tmp_img2.name, width=Cm(16))
+                        para_img2 = doc.add_paragraph()
+                        para_img2.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                        para_img2.add_run().add_picture(tmp_img2.name, width=Cm(16.5))
                         tmp_img_path2 = tmp_img2.name
                     os.remove(tmp_img_path2)
                 
-                # Diagnostics Addition
+                # Diagnostics Addition (Tablo yapısında şık tasarım)
                 if diag_key in report_data["diagnostics"]:
                     diag_data = report_data["diagnostics"][diag_key]
                     
@@ -520,18 +577,93 @@ if DOCX_ENABLED:
                         labelB, descB = diag_data[1]
                         labelComp, descComp = diag_data[2]
                         
-                        doc.add_heading(t("TEŞHİS / DIAGNOSIS", "DIAGNOSIS"), level=2)
-                        doc.add_paragraph(f"{clean_text_for_fpdf(labelA)}: {clean_text_for_fpdf(descA)}")
-                        doc.add_paragraph(f"{clean_text_for_fpdf(labelB)}: {clean_text_for_fpdf(descB)}")
+                        doc.add_paragraph() # Boşluk
                         
-                        doc.add_heading(t("KARŞILAŞTIRMA", "COMPARISON"), level=2)
-                        doc.add_paragraph(clean_text_for_fpdf(descComp))
+                        # Teşhis Tablosu
+                        diag_table = doc.add_table(rows=4, cols=2)
+                        diag_table.style = 'Table Grid'
+                        diag_table.autofit = False
+                        
+                        for row in diag_table.rows:
+                            row.cells[0].width = Cm(8.25)
+                            row.cells[1].width = Cm(8.25)
+                            
+                        # Ana Başlık (Kırmızı Zemin)
+                        cell_header = diag_table.cell(0,0).merge(diag_table.cell(0,1))
+                        set_cell_background(cell_header, "C80000")
+                        cell_header.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+                        p_h = cell_header.paragraphs[0]
+                        p_h.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                        r_h = p_h.add_run(t("TEŞHİS / DIAGNOSIS", "DIAGNOSIS"))
+                        r_h.bold = True
+                        r_h.font.color.rgb = RGBColor(255, 255, 255)
+                        
+                        # Alt Başlıklar A ve B (Gri Zemin)
+                        cell_a_title = diag_table.cell(1,0)
+                        set_cell_background(cell_a_title, "F0F0F0")
+                        cell_a_title.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+                        p_a = cell_a_title.paragraphs[0]
+                        p_a.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                        r_a = p_a.add_run(clean_text_for_fpdf(labelA))
+                        r_a.bold = True
+                        
+                        cell_b_title = diag_table.cell(1,1)
+                        set_cell_background(cell_b_title, "F0F0F0")
+                        cell_b_title.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+                        p_b = cell_b_title.paragraphs[0]
+                        p_b.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                        r_b = p_b.add_run(clean_text_for_fpdf(labelB))
+                        r_b.bold = True
+                        
+                        # İçerikler A ve B
+                        cell_a_desc = diag_table.cell(2,0)
+                        cell_a_desc.paragraphs[0].add_run(clean_text_for_fpdf(descA))
+                        
+                        cell_b_desc = diag_table.cell(2,1)
+                        cell_b_desc.paragraphs[0].add_run(clean_text_for_fpdf(descB))
+                        
+                        # Karşılaştırma Başlığı (Kırmızı Zemin) ve İçeriği
+                        doc.add_paragraph()
+                        
+                        comp_table = doc.add_table(rows=2, cols=1)
+                        comp_table.style = 'Table Grid'
+                        comp_table.autofit = False
+                        comp_table.rows[0].cells[0].width = Cm(16.5)
+                        comp_table.rows[1].cells[0].width = Cm(16.5)
+                        
+                        c_h = comp_table.cell(0,0)
+                        set_cell_background(c_h, "C80000")
+                        c_h.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+                        p_ch = c_h.paragraphs[0]
+                        p_ch.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                        r_ch = p_ch.add_run(t("KARŞILAŞTIRMA", "COMPARISON"))
+                        r_ch.bold = True
+                        r_ch.font.color.rgb = RGBColor(255, 255, 255)
+                        
+                        c_d = comp_table.cell(1,0)
+                        c_d.paragraphs[0].add_run(clean_text_for_fpdf(descComp))
                         
                     elif isinstance(diag_data, list):
                         pass 
                     else:
-                        doc.add_heading(t("Teşhis", "Diagnosis"), level=2)
-                        doc.add_paragraph(clean_text_for_fpdf(str(diag_data)))
+                        # Tekli Teşhis için basit tablo
+                        doc.add_paragraph()
+                        s_table = doc.add_table(rows=2, cols=1)
+                        s_table.style = 'Table Grid'
+                        s_table.autofit = False
+                        s_table.rows[0].cells[0].width = Cm(16.5)
+                        s_table.rows[1].cells[0].width = Cm(16.5)
+                        
+                        c_th = s_table.cell(0,0)
+                        set_cell_background(c_th, "F0F0F0")
+                        c_th.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+                        p_th = c_th.paragraphs[0]
+                        p_th.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                        r_th = p_th.add_run(t("Teşhis", "Diagnosis"))
+                        r_th.bold = True
+                        
+                        c_td = s_table.cell(1,0)
+                        c_td.paragraphs[0].add_run(clean_text_for_fpdf(str(diag_data)))
                         
         buffer = io.BytesIO()
         doc.save(buffer)
@@ -1416,7 +1548,7 @@ elif st.session_state.app_mode == "compare":
         st.sidebar.download_button(
             label=t(f"📥 {ext.upper()} Raporunu İndir", f"📥 Download {ext.upper()} Report"),
             data=st.session_state["report_bytes"],
-            file_name=f"Gates_NVH_Comparative_Report.{ext}",
+            file_name="Gates_NVH_Comparative_Report." + ext,
             mime=mime,
             use_container_width=True,
             type="primary"
