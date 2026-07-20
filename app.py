@@ -20,6 +20,13 @@ try:
 except ImportError:
     PDF_ENABLED = False
 
+try:
+    from docx import Document
+    from docx.shared import Cm
+    DOCX_ENABLED = True
+except ImportError:
+    DOCX_ENABLED = False
+
 # ============================================================
 # SAYFA AYARLARI VE GATES KURUMSAL TEMA
 # ============================================================
@@ -44,14 +51,14 @@ if "app_mode" not in st.session_state:
     st.session_state.app_mode = None  # None (Menü), "single", "compare"
 if "analyze" not in st.session_state:
     st.session_state.analyze = False
-if "pdf_ready" not in st.session_state:
-    st.session_state.pdf_ready = False
+if "report_ready" not in st.session_state:
+    st.session_state.report_ready = False
 if "lang" not in st.session_state:
     st.session_state.lang = "tr"
 
 def reset_analysis():
     st.session_state.analyze = False
-    st.session_state.pdf_ready = False
+    st.session_state.report_ready = False
 
 def go_to_main_menu():
     st.session_state.app_mode = None
@@ -442,6 +449,96 @@ if PDF_ENABLED:
         os.remove(tmp_pdf_path)
         return pdf_bytes
 
+if DOCX_ENABLED:
+    def build_docx_report(report_data, antet_data):
+        doc = Document()
+        
+        # Başlık
+        doc.add_heading("GATES R&D NVH Analysis Report", level=0)
+        
+        # Antet Tablosu
+        table = doc.add_table(rows=6, cols=2)
+        table.style = 'Table Grid'
+        
+        info_list = [
+            ("Report-No.:", antet_data.get('report_no', '')),
+            ("Subject:", antet_data.get('subject', '')),
+            ("Date:", antet_data.get('date', '')),
+            ("Location:", antet_data.get('location', '')),
+            ("Author:", antet_data.get('author', '').replace('\n', ' / ')),
+            ("Department:", antet_data.get('department', '').replace('\n', ' / '))
+        ]
+        for i, (k, v) in enumerate(info_list):
+            row_cells = table.rows[i].cells
+            row_cells[0].text = k
+            row_cells[0].paragraphs[0].runs[0].bold = True
+            row_cells[1].text = v
+            
+        doc.add_paragraph()
+        
+        # Grafikler ve Teşhisler
+        sections = [
+            ("Color Map", "Color Map"), 
+            ("Color Map (A - Referans)", "NONE"), 
+            ("Color Map (B - Test)", "Color Map (B - Test)"),
+            ("Order Plot", "Order Plot"), 
+            ("SII Gauge", "SII Gauge"), 
+            ("1/3 Octave", "1/3 Octave")
+        ]
+
+        for fig_key, diag_key in sections:
+            if fig_key in report_data["figures"]:
+                title_text = "Articulation Index / SII Analysis" if fig_key == "SII Gauge" else fig_key
+                doc.add_heading(clean_text_for_fpdf(title_text), level=1)
+                
+                fig = report_data["figures"][fig_key]
+                img_height = 300 if fig_key == "SII Gauge" else 400
+                
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp_img:
+                    time.sleep(0.5) 
+                    fig.write_image(tmp_img.name, format="png", engine="kaleido", width=800, height=img_height, scale=4)
+                    doc.add_picture(tmp_img.name, width=Cm(16))
+                    tmp_img_path = tmp_img.name
+                os.remove(tmp_img_path)
+                
+                if fig_key == "SII Gauge" and "SII Bands" in report_data["figures"]:
+                    fig2 = report_data["figures"]["SII Bands"]
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp_img2:
+                        time.sleep(0.5)
+                        fig2.write_image(tmp_img2.name, format="png", engine="kaleido", width=800, height=260, scale=4)
+                        doc.add_picture(tmp_img2.name, width=Cm(16))
+                        tmp_img_path2 = tmp_img2.name
+                    os.remove(tmp_img_path2)
+                
+                if diag_key in report_data["diagnostics"]:
+                    diag_data = report_data["diagnostics"][diag_key]
+                    
+                    doc.add_heading("TEŞHİS / DIAGNOSIS", level=2)
+                    
+                    if isinstance(diag_data, list) and len(diag_data) == 3:
+                        labelA, descA = diag_data[0]
+                        labelB, descB = diag_data[1]
+                        labelComp, descComp = diag_data[2]
+                        
+                        p = doc.add_paragraph()
+                        p.add_run(f"A: ").bold = True
+                        p.add_run(f"{descA}\n")
+                        p.add_run(f"B: ").bold = True
+                        p.add_run(f"{descB}\n\n")
+                        p.add_run("KARŞILAŞTIRMA / COMPARISON:\n").bold = True
+                        p.add_run(f"{descComp}")
+                    elif isinstance(diag_data, list):
+                        pass
+                    else:
+                        doc.add_paragraph(str(diag_data))
+                        
+                doc.add_page_break()
+        
+        import io
+        doc_bytes_io = io.BytesIO()
+        doc.save(doc_bytes_io)
+        return doc_bytes_io.getvalue()
+
 # ============================================================
 # MÜHENDİSLİK FONKSİYONLARI
 # ============================================================
@@ -604,26 +701,12 @@ def bin_tracks_by_rpm(rpm_values: np.ndarray, tracks: dict[float, np.ndarray], r
     for selected_order, levels in tracks.items():
         binned = np.full(bin_count, np.nan, dtype=float)
         for bin_index in range(bin_count):
-            mask = (indices == bin_index) & np.isfinite(rpm_values) & np.isfinite(levels)
-            if np.any(mask): binned[bin_index] = float(np.nanmedian(levels[mask]))
-        output[f"order_{selected_order:g}"] = binned
-    result = pd.DataFrame(output)
-    value_columns = [col for col in result.columns if col != "rpm"]
-    return result.dropna(subset=value_columns, how="all")
+        st.title(t("🔊 Gürültü ve Akustik Analiz Sistemi (NVH)", "🔊 Noise and Acoustic Analysis System (NVH)"))
+        st.caption("COLOR MAPS • ORDER PLOTS • ARTICULATION INDEX / SII • 1/3 OCTAVE BAND PLOTS")
 
-# ============================================================
-# ORTAK YAN MENÜ (SIDEBAR) BİLEŞENLERİ
-# ============================================================
-if st.session_state.app_mode is not None:
-    st.sidebar.button(t("⬅️ Ana Menüye Dön", "⬅️ Back to Main Menu"), on_click=go_to_main_menu, use_container_width=True)
-    st.sidebar.markdown("---")
-
-    st.title(t("🔊 Gürültü ve Akustik Analiz Sistemi (NVH)", "🔊 Noise and Acoustic Analysis System (NVH)"))
-    st.caption("COLOR MAPS • ORDER PLOTS • ARTICULATION INDEX / SII • 1/3 OCTAVE BAND PLOTS")
-
-# PDF DİALOG MODÜLÜ
-@st.dialog(t("📄 PDF Rapor Bilgilerini Girin", "📄 Enter PDF Report Information"))
-def pdf_info_dialog(report_data):
+# DİJİTAL RAPOR DİALOG MODÜLÜ
+@st.dialog(t("📄 Dijital Rapor Bilgilerini Girin", "📄 Enter Digital Report Information"))
+def report_info_dialog(report_data):
     st.write(t("Lütfen raporun ilk sayfasındaki antette görünecek bilgileri doldurun.", 
                "Please fill in the information that will appear in the header on the first page of the report."))
     col1, col2 = st.columns(2)
@@ -639,19 +722,33 @@ def pdf_info_dialog(report_data):
     distribution = st.text_input("Distribution list:", value="Torsten Paluszek")
     file_path = st.text_input(t("Dosya Yolu (Alt Footer):", "File Path (Bottom Footer):"), value=r"N:\Engineering\Internal\Working_Folders\18_TEST\03 Test Report Preparation\1) WORD TEST REPORTS\3 CUSTOMER RETURN\E4119\06.07.2026 - 2\E4119 R0010 J-2603055.docx")
     
+    st.markdown("---")
+    report_format = st.radio(t("Rapor Formatı:", "Report Format:"), ["PDF", "Word (.docx)"], horizontal=True)
+
     if st.button(t("✅ Raporu Oluştur", "✅ Generate Report"), use_container_width=True):
         antet_data = {
             "subject": subject, "date": date_val, "author": author, "report_no": report_no,
             "location": location, "department": department, "distribution": distribution, "file_path": file_path
         }
-        with st.spinner(t("PDF oluşturuluyor, grafikler işleniyor (Lütfen bekleyin)...", "Generating PDF, processing charts (Please wait)...")):
+        with st.spinner(t("Rapor oluşturuluyor, grafikler işleniyor (Lütfen bekleyin)...", "Generating report, processing charts (Please wait)...")):
             try:
-                pdf_bytes = build_pdf_report(report_data, antet_data)
-                st.session_state["pdf_bytes"] = pdf_bytes
-                st.session_state.pdf_ready = True
+                if report_format == "PDF":
+                    report_bytes = build_pdf_report(report_data, antet_data)
+                    st.session_state["report_mime"] = "application/pdf"
+                    st.session_state["report_ext"] = "pdf"
+                else:
+                    if not DOCX_ENABLED:
+                        st.error(t("python-docx kütüphanesi eksik. Lütfen 'pip install python-docx' çalıştırın.", "python-docx library is missing. Please run 'pip install python-docx'."))
+                        st.stop()
+                    report_bytes = build_docx_report(report_data, antet_data)
+                    st.session_state["report_mime"] = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                    st.session_state["report_ext"] = "docx"
+
+                st.session_state["report_bytes"] = report_bytes
+                st.session_state["report_ready"] = True
                 st.rerun()
             except Exception as e:
-                st.error(t(f"PDF Oluşturma Hatası: {e}\nLütfen 'pip install fpdf2 kaleido' kurulu olduğundan emin olun.", f"PDF Error: {e}"))
+                st.error(t(f"Rapor Oluşturma Hatası: {e}\nLütfen gerekli kütüphanelerin (fpdf2, python-docx, kaleido) kurulu olduğundan emin olun.", f"Report Error: {e}"))
 
 # ============================================================
 # 2. TEKLİ ANALİZ MODU (SINGLE ANALYSIS)
@@ -928,13 +1025,14 @@ if st.session_state.app_mode == "single":
         st.info(t(f"📊 **Enerji Dağılımı:** Düşük Frekans Toplamı: {low_db_total:.1f} dB | Yüksek Frekans Toplamı: {high_db_total:.1f} dB\n\n🔍 **Teşhis:** {diag_final}", f"📊 **Energy Distribution:** Low Freq Total: {low_db_total:.1f} dB | High Freq Total: {high_db_total:.1f} dB\n\n🔍 **Diagnosis:** {diag_final}"))
         report_data["diagnostics"]["1/3 Octave"] = diag_final
 
-    if PDF_ENABLED:
-        st.sidebar.markdown("---")
-        if st.sidebar.button(t("📄 PDF Raporu Hazırla", "📄 Prepare PDF Report"), use_container_width=True):
-            pdf_info_dialog(report_data)
+    st.sidebar.markdown("---")
+    if st.sidebar.button(t("📄 Dijital Rapor Hazırla", "📄 Prepare Digital Report"), use_container_width=True):
+        report_info_dialog(report_data)
 
-        if st.session_state.get("pdf_ready", False) and "pdf_bytes" in st.session_state:
-            st.sidebar.download_button(label=t("📥 PDF Raporunu İndir", "📥 Download PDF Report"), data=st.session_state["pdf_bytes"], file_name=f"Gates_NVH_Report_{uploaded_audio.name}.pdf", mime="application/pdf", use_container_width=True, type="primary")
+    if st.session_state.get("report_ready", False) and "report_bytes" in st.session_state:
+        ext = st.session_state.get("report_ext", "pdf")
+        mime = st.session_state.get("report_mime", "application/pdf")
+        st.sidebar.download_button(label=t(f"📥 {ext.upper()} Raporunu İndir", f"📥 Download {ext.upper()} Report"), data=st.session_state["report_bytes"], file_name=f"Gates_NVH_Report_{uploaded_audio.name}.{ext}", mime=mime, use_container_width=True, type="primary")
 
 # ============================================================
 # 3. KARŞILAŞTIRMA MODU (A/B COMPARATIVE ANALYSIS)
@@ -1289,10 +1387,11 @@ elif st.session_state.app_mode == "compare":
             (t("KARŞILAŞTIRMA", "COMPARISON"), t(diag_comp_tr, diag_comp_en))
         ]
 
-    if PDF_ENABLED:
-        st.sidebar.markdown("---")
-        if st.sidebar.button(t("📄 PDF Raporu Hazırla", "📄 Prepare PDF Report"), use_container_width=True):
-            pdf_info_dialog(report_data)
+    st.sidebar.markdown("---")
+    if st.sidebar.button(t("📄 Dijital Rapor Hazırla", "📄 Prepare Digital Report"), use_container_width=True):
+        report_info_dialog(report_data)
 
-        if st.session_state.get("pdf_ready", False) and "pdf_bytes" in st.session_state:
-            st.sidebar.download_button(label=t("📥 PDF Raporunu İndir", "📥 Download PDF Report"), data=st.session_state["pdf_bytes"], file_name="Gates_NVH_Comparative_Report.pdf", mime="application/pdf", use_container_width=True, type="primary")
+    if st.session_state.get("report_ready", False) and "report_bytes" in st.session_state:
+        ext = st.session_state.get("report_ext", "pdf")
+        mime = st.session_state.get("report_mime", "application/pdf")
+        st.sidebar.download_button(label=t(f"📥 {ext.upper()} Raporunu İndir", f"📥 Download {ext.upper()} Report"), data=st.session_state["report_bytes"], file_name=f"Gates_NVH_Comparative_Report.{ext}", mime=mime, use_container_width=True, type="primary")
